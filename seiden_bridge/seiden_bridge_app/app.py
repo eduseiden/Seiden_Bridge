@@ -964,8 +964,6 @@ def mark_reader_offline(
         poll_interval=poll_interval,
         failure_count=runtime["failures"],
         max_retry_interval=max_retry_interval,
-        publish_last_photo=publish_last_photo,
-        photo_max_size_mb=photo_max_size_mb,
     )
 
     runtime["next_check"] = (

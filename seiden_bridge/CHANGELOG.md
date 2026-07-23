@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Corrige falha crítica ao marcar um leitor como offline.
+- Remove parâmetros indevidos enviados a `calculate_backoff()`, que causavam `NameError` quando o equipamento ficava inacessível.
+- O Bridge agora mantém o processo ativo, publica o estado offline e continua as tentativas com backoff exponencial.
+
 ## 0.6.1
 
 - Modularizado o núcleo em `seiden_bridge_app`.

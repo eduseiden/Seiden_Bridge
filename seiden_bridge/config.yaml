@@ -1,5 +1,5 @@
 name: "Seiden Bridge"
-version: "0.6.1"
+version: "0.6.2"
 slug: "seiden_bridge"
 description: "Camada de integração da Seiden Tech para leitores de acesso e reconhecimento, com eventos, disponibilidade e entidades operacionais no Home Assistant"
 url: "https://github.com/eduseiden/Seiden-HA"

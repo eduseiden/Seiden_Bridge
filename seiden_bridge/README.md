@@ -1,8 +1,8 @@
-# Seiden Bridge 0.6.1
+# Seiden Bridge 0.6.2
 
 O Seiden Bridge é a camada de integração da Seiden Tech para leitores de acesso e reconhecimento. Ele normaliza eventos dos equipamentos, monitora disponibilidade, mantém o estado operacional local e publica entidades e eventos no Home Assistant.
 
-## Ruptura arquitetural da versão 0.6.1
+## Ruptura arquitetural da versão 0.6.2
 
 Esta versão substitui integralmente o antigo **Seiden EVO Bridge**. Como o ambiente atual é de testes, não há migração automática da versão 0.5.1.
 
@@ -137,7 +137,7 @@ fit_mode: contain
 6. Atualize dashboards e automações para as novas entidades.
 
 
-## Arquitetura interna 0.6.1
+## Arquitetura interna 0.6.2
 
 A aplicação agora possui um núcleo modular. O arquivo `seiden_bridge.py` é somente o ponto de entrada. Drivers ficam em `seiden_bridge_app/drivers/` e implementam o contrato `ReaderDriver`.
 
