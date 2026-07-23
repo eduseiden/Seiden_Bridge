@@ -42,6 +42,7 @@ def create_presence_event(
     # Campos planos preservados para compatibilidade com automações 0.6.0.
     payload.update(
         {
+            "reader_id": operational["reader_id"],
             "driver": reader.get("driver", "evo"),
             "reader_name": reader["name"],
             "reader_ip": reader["ip"],

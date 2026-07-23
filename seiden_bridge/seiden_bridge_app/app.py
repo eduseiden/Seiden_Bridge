@@ -999,6 +999,7 @@ def mark_reader_offline(
 
         offline_payload = {
             "source": "seiden_bridge",
+            "reader_id": slugify_entity(reader_name),
             "driver": reader.get("driver", "evo"),
             "reader_name": reader_name,
             "reader_ip": reader_ip,
@@ -1063,6 +1064,7 @@ def mark_reader_online(
 
         online_payload = {
             "source": "seiden_bridge",
+            "reader_id": slugify_entity(reader_name),
             "driver": reader.get("driver", "evo"),
             "reader_name": reader_name,
             "reader_ip": reader_ip,

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3
+
+### Corrigido
+
+- Incluído `reader_id` estável nos eventos `seiden_reader_offline` e `seiden_reader_online`.
+- Incluído `reader_id` também nos campos planos do evento de presença para compatibilidade.
+- Padronizada a correlação de fontes entre Seiden Bridge e Seiden FLOW.
+
+
 ## 0.6.2
 
 - Corrige falha crítica ao marcar um leitor como offline.
