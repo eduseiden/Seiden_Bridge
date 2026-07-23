@@ -1,0 +1,51 @@
+title: Seiden Bridge
+views:
+  - title: Visão geral
+    path: overview
+    icon: mdi:face-recognition
+    cards:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: picture-entity
+            entity: sensor.seiden_last_photo
+            name: Última passagem
+            show_name: true
+            show_state: false
+            show_entity_picture: true
+            fit_mode: contain
+
+          - type: entities
+            title: Último movimento
+            entities:
+              - entity: sensor.seiden_last_person
+                name: Pessoa
+              - entity: sensor.seiden_last_action
+                name: Movimento
+              - entity: sensor.seiden_last_reader
+                name: Leitor
+              - entity: sensor.seiden_last_event_time
+                name: Horário
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: entity
+            entity: sensor.seiden_people_inside
+            name: Presentes
+          - type: entity
+            entity: sensor.seiden_entries_today
+            name: Entradas hoje
+          - type: entity
+            entity: sensor.seiden_exits_today
+            name: Saídas hoje
+
+      - type: entities
+        title: Diagnóstico
+        entities:
+          - binary_sensor.seiden_bridge_running
+          - sensor.seiden_bridge_version
+          - sensor.seiden_bridge_uptime
+          - sensor.seiden_readers_status

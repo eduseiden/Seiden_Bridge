@@ -1,0 +1,68 @@
+name: "Seiden Bridge"
+version: "0.6.0"
+slug: "seiden_bridge"
+description: "Camada de integração da Seiden Tech para leitores de acesso e reconhecimento, com eventos, disponibilidade e entidades operacionais no Home Assistant"
+url: "https://github.com/eduseiden/Seiden-HA"
+
+startup: services
+boot: auto
+init: false
+
+arch:
+  - amd64
+  - aarch64
+
+host_network: true
+hassio_api: true
+homeassistant_api: true
+
+map:
+  - config:rw
+hassio_role: default
+
+options:
+  poll_interval: 2
+  request_timeout: 5
+  max_retry_interval: 300
+  log_level: "INFO"
+  publish_last_photo: true
+  photo_max_size_mb: 5
+
+  ha_event: "seiden_presence"
+  reader_offline_event: "seiden_reader_offline"
+  reader_online_event: "seiden_reader_online"
+
+  entry_readers:
+    - name: "Entrada Principal"
+      driver: "evo"
+      ip: "192.168.4.157"
+      password: "1234"
+      enabled: true
+
+  exit_readers: []
+
+schema:
+  poll_interval: int
+  request_timeout: int
+  max_retry_interval: int
+  log_level: list(DEBUG|INFO|WARNING|ERROR)
+  publish_last_photo: bool
+  photo_max_size_mb: int
+
+  ha_event: str
+  reader_offline_event: str
+  reader_online_event: str
+
+  entry_readers:
+    - name: str
+      driver: list(evo|control_id|hikvision|intelbras)
+      ip: str
+      password: password
+      enabled: bool
+
+  exit_readers:
+    - name: str
+      driver: list(evo|control_id|hikvision|intelbras)
+      ip: str
+      password: password
+      enabled: bool
