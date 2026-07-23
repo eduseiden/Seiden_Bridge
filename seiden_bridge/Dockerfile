@@ -3,9 +3,9 @@ FROM ${BUILD_FROM}
 
 RUN python3 -m pip install --no-cache-dir requests
 
-COPY run.sh /
-COPY seiden_bridge.py /
-
+COPY seiden_bridge.py /seiden_bridge.py
+COPY seiden_bridge_app /seiden_bridge_app
+COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-CMD ["/run.sh"]
+CMD [ "/run.sh" ]

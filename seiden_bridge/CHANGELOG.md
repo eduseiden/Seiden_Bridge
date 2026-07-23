@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+- Modularizado o núcleo em `seiden_bridge_app`.
+- Criada interface abstrata `ReaderDriver`.
+- Movido o protocolo EVO para um driver isolado.
+- Criada fábrica central de drivers.
+- Padronizado o envelope de eventos (`schema_version: 1.0`).
+- Adicionados objetos estruturados `reader`, `person` e `operation`.
+- Preservados todos os campos planos e entidades da 0.6.0.
+- Mantido o comportamento operacional e o dashboard compatíveis.
+
 ## 0.6.0
 
 ### Arquitetura
