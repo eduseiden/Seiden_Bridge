@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.0 — Connector Foundation
+
+### Arquitetura
+- Introduz `connections` como modelo principal de configuração.
+- Separa conexão técnica, endpoint e contexto operacional.
+- Cria a camada `connectors` com contrato comum `BaseConnector`.
+- EVO passa a ser o primeiro conector, deixando de definir o escopo do Bridge.
+- Novo envelope canônico de eventos `schema_version: 2.0`, com `connection`, `context`, `subject` e `result`.
+
+### Casos de uso
+- `passage` com direção `in` ou `out` mantém o Occupancy Engine.
+- `authorization` e demais interações sem direção registram autenticações sem alterar ocupação.
+- A direção passa a ser opcional fora do caso de passagem.
+
+### Compatibilidade
+- Configurações `entry_readers`, `exit_readers` e `readers` continuam aceitas com aviso de migração.
+- Campos e objetos legados de eventos são preservados durante a transição.
+- Eventos e entidades existentes do Home Assistant permanecem compatíveis.
+
+
 ## 0.6.3
 
 ### Corrigido

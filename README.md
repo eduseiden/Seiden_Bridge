@@ -1,8 +1,56 @@
-# Seiden Bridge 0.6.3
+# Seiden Bridge 0.7.0
+
+## Connector Foundation
+
+O Seiden Bridge é a camada de integração do Seiden One. A versão 0.7.0 substitui o modelo central de **leitores de entrada e saída** por **conexões**, preparando o produto para integrar equipamentos, APIs, sistemas, bancos de dados, mensageria e plataformas de automação. Nesta versão, o conector funcional continua sendo o EVO.
+
+### Novo modelo de configuração
+
+```yaml
+connections:
+  - id: evo_entrada
+    name: Entrada Principal
+    connector: evo
+    enabled: true
+    password: "1234"
+    endpoint:
+      host: 192.168.4.157
+      scheme: http
+      path: /api
+    context:
+      interaction_type: passage
+      direction: in
+```
+
+Um EVO utilizado apenas para liberar um recurso não precisa de direção:
+
+```yaml
+connections:
+  - id: evo_maquina
+    name: Liberação da Máquina
+    connector: evo
+    enabled: true
+    password: "1234"
+    endpoint:
+      host: 192.168.4.158
+      scheme: http
+      path: /api
+    context:
+      interaction_type: authorization
+      direction: none
+```
+
+`passage` atualiza o Occupancy Engine. `authorization` publica a autenticação, mas não altera a quantidade de pessoas presentes.
+
+### Compatibilidade
+
+As configurações `entry_readers`, `exit_readers` e `readers` continuam sendo carregadas automaticamente, com aviso de migração. O evento canônico passa ao esquema `2.0`, mas mantém os objetos e campos planos das versões 0.6.x durante a transição.
+
+---
 
 O Seiden Bridge é a camada de integração da Seiden Tech para leitores de acesso e reconhecimento. Ele normaliza eventos dos equipamentos, monitora disponibilidade, mantém o estado operacional local e publica entidades e eventos no Home Assistant.
 
-## Ruptura arquitetural da versão 0.6.3
+## Ruptura arquitetural da versão 0.7.0
 
 Esta versão substitui integralmente o antigo **Seiden EVO Bridge**. Como o ambiente atual é de testes, não há migração automática da versão 0.5.1.
 
@@ -137,7 +185,7 @@ fit_mode: contain
 6. Atualize dashboards e automações para as novas entidades.
 
 
-## Arquitetura interna 0.6.3
+## Arquitetura interna 0.7.0
 
 A aplicação agora possui um núcleo modular. O arquivo `seiden_bridge.py` é somente o ponto de entrada. Drivers ficam em `seiden_bridge_app/drivers/` e implementam o contrato `ReaderDriver`.
 

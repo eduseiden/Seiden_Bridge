@@ -11,7 +11,7 @@ import re
 
 import requests
 
-from .drivers import execute_reader_command
+from .connectors import execute_connection_command
 from .events import create_presence_event
 
 
@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo"}
 KNOWN_DRIVERS = {"evo", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.6.1"
+BRIDGE_VERSION = "0.7.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -33,7 +33,9 @@ DASHBOARD_PUBLISH_INTERVAL = 60
 
 DEFAULT_PRESENCE_EVENT = "seiden_presence"
 DEFAULT_READER_OFFLINE_EVENT = "seiden_reader_offline"
+DEFAULT_CONNECTION_OFFLINE_EVENT = "seiden_connection_offline"
 DEFAULT_READER_ONLINE_EVENT = "seiden_reader_online"
+DEFAULT_CONNECTION_ONLINE_EVENT = "seiden_connection_online"
 
 IDLE_SLEEP_SECONDS = 60
 
@@ -103,6 +105,7 @@ def sanitize_config_for_log(
         "entry_readers",
         "exit_readers",
         "readers",
+        "connections",
     ):
         sanitized[key] = [
             {
@@ -116,130 +119,106 @@ def sanitize_config_for_log(
     return sanitized
 
 
-def normalize_reader(
-    reader: dict[str, Any],
-    direction: str,
-) -> dict[str, Any]:
-    """Normaliza um leitor para uso interno."""
+def normalize_connection(connection: dict[str, Any]) -> dict[str, Any]:
+    """Normaliza uma conexão para o núcleo 0.7.0.
+
+    O formato interno preserva aliases antigos (reader/driver/ip) para manter
+    compatibilidade operacional enquanto o EVO migra para a nova fundação.
+    """
+    endpoint = connection.get("endpoint") or {}
+    context = connection.get("context") or {}
+    connector = str(connection.get("connector", connection.get("driver", "evo"))).strip().lower()
+    host = str(endpoint.get("host", connection.get("ip", ""))).strip()
+    interaction_type = str(context.get("interaction_type", connection.get("interaction_type", "passage"))).strip().lower()
+    direction = context.get("direction", connection.get("direction"))
+    if direction in ("none", "", None):
+        direction = None
+    connection_id = str(connection.get("id") or slugify_entity(connection.get("name", "connection")))
     return {
-        **reader,
-        "enabled": reader.get("enabled", True),
-        "driver": str(reader.get("driver", "evo")).strip().lower(),
+        **connection,
+        "id": connection_id,
+        "connection_id": connection_id,
+        "enabled": connection.get("enabled", True),
+        "connector": connector,
+        "driver": connector,  # alias legado temporário
+        "endpoint": {**endpoint, "host": host},
+        "host": host,
+        "ip": host,  # alias EVO legado temporário
+        "context": {
+            **context,
+            "interaction_type": interaction_type,
+            "direction": direction,
+        },
+        "interaction_type": interaction_type,
         "direction": direction,
     }
 
 
-def build_readers_from_config(
+def _legacy_reader_to_connection(reader: dict[str, Any], direction: str | None) -> dict[str, Any]:
+    """Converte configurações 0.6.x para o modelo de conexão 0.7.0."""
+    return normalize_connection({
+        **reader,
+        "id": reader.get("id") or slugify_entity(reader.get("name", "reader")),
+        "connector": reader.get("driver", "evo"),
+        "endpoint": {"host": reader.get("ip", "")},
+        "context": {
+            "interaction_type": "passage",
+            "direction": direction,
+        },
+    })
+
+
+def build_connections_from_config(
     config: dict[str, Any],
-) -> tuple[
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-]:
-    """
-    Converte as listas de entrada e saída em leitores internos.
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Carrega o novo formato `connections` e migra formatos anteriores."""
+    configured_connections = config.get("connections")
+    all_connections: list[dict[str, Any]] = []
 
-    Retorna:
-    - todos os leitores;
-    - leitores ativos;
-    - leitores desativados.
-    """
-    entry_readers = config.get("entry_readers")
-    exit_readers = config.get("exit_readers")
-
-    new_configuration_present = (
-        entry_readers is not None
-        or exit_readers is not None
-    )
-
-    all_readers: list[dict[str, Any]] = []
-
-    if new_configuration_present:
-        entry_readers = entry_readers or []
-        exit_readers = exit_readers or []
-
-        if not isinstance(entry_readers, list):
-            raise RuntimeError(
-                "entry_readers deve ser uma lista"
-            )
-
-        if not isinstance(exit_readers, list):
-            raise RuntimeError(
-                "exit_readers deve ser uma lista"
-            )
-
-        for reader in entry_readers:
-            if not isinstance(reader, dict):
-                raise RuntimeError(
-                    "Existe um leitor de entrada inválido"
-                )
-
-            all_readers.append(
-                normalize_reader(
-                    reader=reader,
-                    direction="in",
-                )
-            )
-
-        for reader in exit_readers:
-            if not isinstance(reader, dict):
-                raise RuntimeError(
-                    "Existe um leitor de saída inválido"
-                )
-
-            all_readers.append(
-                normalize_reader(
-                    reader=reader,
-                    direction="out",
-                )
-            )
-
+    if configured_connections is not None:
+        if not isinstance(configured_connections, list):
+            raise RuntimeError("connections deve ser uma lista")
+        for connection in configured_connections:
+            if not isinstance(connection, dict):
+                raise RuntimeError("Existe uma conexão inválida")
+            all_connections.append(normalize_connection(connection))
     else:
-        legacy_readers = config.get("readers", [])
-
-        if legacy_readers:
+        entry_readers = config.get("entry_readers")
+        exit_readers = config.get("exit_readers")
+        if entry_readers is not None or exit_readers is not None:
             LOGGER.warning(
-                "[CONFIG] Configuração antiga detectada em 'readers'. "
-                "Migre os equipamentos para 'entry_readers' e "
-                "'exit_readers'."
+                "[CONFIG] Configuração 0.6.x detectada. Migre 'entry_readers' e "
+                "'exit_readers' para 'connections'."
             )
-
-        if not isinstance(legacy_readers, list):
-            raise RuntimeError(
-                "A configuração antiga 'readers' deve ser uma lista"
-            )
-
-        for reader in legacy_readers:
-            if not isinstance(reader, dict):
-                raise RuntimeError(
-                    "Existe um leitor inválido na configuração antiga"
+            for reader in entry_readers or []:
+                if not isinstance(reader, dict):
+                    raise RuntimeError("Existe um leitor de entrada inválido")
+                all_connections.append(_legacy_reader_to_connection(reader, "in"))
+            for reader in exit_readers or []:
+                if not isinstance(reader, dict):
+                    raise RuntimeError("Existe um leitor de saída inválido")
+                all_connections.append(_legacy_reader_to_connection(reader, "out"))
+        else:
+            legacy_readers = config.get("readers", [])
+            if legacy_readers:
+                LOGGER.warning(
+                    "[CONFIG] Configuração antiga detectada em 'readers'. "
+                    "Migre para 'connections'."
                 )
+            if not isinstance(legacy_readers, list):
+                raise RuntimeError("A configuração antiga 'readers' deve ser uma lista")
+            for reader in legacy_readers:
+                if not isinstance(reader, dict):
+                    raise RuntimeError("Existe um leitor inválido na configuração antiga")
+                all_connections.append(_legacy_reader_to_connection(reader, reader.get("direction", "in")))
 
-            all_readers.append(
-                normalize_reader(
-                    reader=reader,
-                    direction=reader.get("direction", "in"),
-                )
-            )
+    active = [item for item in all_connections if item.get("enabled", True)]
+    disabled = [item for item in all_connections if not item.get("enabled", True)]
+    return all_connections, active, disabled
 
-    active_readers = [
-        reader
-        for reader in all_readers
-        if reader.get("enabled", True)
-    ]
 
-    disabled_readers = [
-        reader
-        for reader in all_readers
-        if not reader.get("enabled", True)
-    ]
-
-    return (
-        all_readers,
-        active_readers,
-        disabled_readers,
-    )
-
+# Alias interno temporário para reduzir risco na migração 0.7.0.
+build_readers_from_config = build_connections_from_config
 
 def default_state() -> dict[str, Any]:
     """Cria o estado inicial do Occupancy Engine."""
@@ -471,7 +450,7 @@ def publish_reader_entity(
             "device_class": "connectivity",
             "reader_name": reader["name"],
             "reader_ip": reader["ip"],
-            "direction": reader["direction"],
+            "direction": reader.get("direction"),
             "driver": reader.get("driver", "evo"),
             "operational_status": status,
             "failure_count": runtime.get("failures", 0),
@@ -670,7 +649,7 @@ def publish_operational_entities(
         {
             "name": reader["name"],
             "ip": reader["ip"],
-            "direction": reader["direction"],
+            "direction": reader.get("direction"),
             "status": reader_runtime[reader["ip"]].get("status", "unknown"),
             "failure_count": reader_runtime[reader["ip"]].get("failures", 0),
             "last_success": reader_runtime[reader["ip"]].get("last_success_iso"),
@@ -763,6 +742,7 @@ def action_label(action: str | None) -> str:
     labels = {
         "entered": "Entrada",
         "exited": "Saída",
+        "authorized": "Autorização",
         "none": "Nenhum evento",
     }
     return labels.get(str(action), str(action or "Nenhum evento"))
@@ -773,82 +753,58 @@ def handle_authorized_record(
     record: dict[str, Any],
     state: dict[str, Any],
 ) -> dict[str, Any]:
-    """Atualiza o Occupancy Engine após uma autenticação."""
-    reset_daily_state_if_needed(state)
+    """Processa autenticação conforme o contexto da conexão.
 
+    `passage` atualiza ocupação quando há direção in/out.
+    `authorization` registra a liberação sem alterar ocupação.
+    """
+    reset_daily_state_if_needed(state)
     user_id = str(record.get("enrollid"))
     user_name = record.get("name") or user_id
-    direction = reader["direction"]
+    direction = reader.get("direction")
+    interaction_type = reader.get("interaction_type", "passage")
     event_time = record.get("time") or now_iso()
     photo_url = build_photo_url(reader, record)
     photo_filename = build_photo_filename(record)
-
     people_before = len(state["people_inside"])
-
     is_first_entry = False
     is_last_exit = False
+    was_already_inside = user_id in state["people_inside"]
 
-    was_already_inside = (
-        user_id in state["people_inside"]
-    )
-
-    if direction == "in":
+    if interaction_type == "passage" and direction == "in":
         if not was_already_inside:
             if people_before == 0:
                 is_first_entry = True
-
-                state["first_entry_today"] = {
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "time": event_time,
-                }
-
+                state["first_entry_today"] = {"user_id": user_id, "user_name": user_name, "time": event_time}
             state["people_inside"][user_id] = {
-                "user_id": user_id,
-                "user_name": user_name,
-                "entered_at": event_time,
-                "reader_name": reader["name"],
-                "reader_ip": reader["ip"],
+                "user_id": user_id, "user_name": user_name, "entered_at": event_time,
+                "reader_name": reader["name"], "reader_ip": reader["ip"],
+                "connection_id": reader["connection_id"],
             }
-
         action = "entered"
         state["entries_today"] = int(state.get("entries_today", 0)) + 1
-
-    elif direction == "out":
+    elif interaction_type == "passage" and direction == "out":
         if was_already_inside:
             del state["people_inside"][user_id]
-
             if len(state["people_inside"]) == 0:
                 is_last_exit = True
-
-                state["last_exit_today"] = {
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "time": event_time,
-                }
-
+                state["last_exit_today"] = {"user_id": user_id, "user_name": user_name, "time": event_time}
         action = "exited"
         state["exits_today"] = int(state.get("exits_today", 0)) + 1
-
     else:
-        raise RuntimeError(
-            f"Direção interna inválida: {direction}"
-        )
+        action = "authorized"
 
-    people_inside = list(
-        state["people_inside"].values()
-    )
-
+    people_inside = list(state["people_inside"].values())
     state["events_today"] = int(state.get("events_today", 0)) + 1
-
-    reader_id = slugify_entity(reader["name"])
     operational = {
-        "reader_id": reader_id,
+        "reader_id": reader["connection_id"],
+        "connection_id": reader["connection_id"],
         "action": action,
+        "interaction_type": interaction_type,
         "photo_url": photo_url,
         "photo_filename": photo_filename,
         "was_already_inside": was_already_inside,
-        "exit_without_entry": direction == "out" and not was_already_inside,
+        "exit_without_entry": interaction_type == "passage" and direction == "out" and not was_already_inside,
         "is_first_entry": is_first_entry,
         "is_last_exit": is_last_exit,
         "people_inside_count": len(people_inside),
@@ -857,28 +813,17 @@ def handle_authorized_record(
         "first_entry_today": state.get("first_entry_today"),
         "last_exit_today": state.get("last_exit_today"),
     }
-    payload = create_presence_event(
-        reader=reader,
-        record=record,
-        operational=operational,
-    )
-
+    payload = create_presence_event(reader=reader, record=record, operational=operational)
     state["last_event"] = {
-        "user_id": user_id,
-        "user_name": user_name,
-        "reader_name": reader["name"],
-        "reader_ip": reader["ip"],
-        "direction": direction,
-        "action": action,
-        "time": event_time,
-        "photo_url": photo_url,
-        "photo_filename": photo_filename,
+        "user_id": user_id, "user_name": user_name,
+        "reader_name": reader["name"], "reader_ip": reader["ip"],
+        "connection_id": reader["connection_id"], "connector": reader["connector"],
+        "interaction_type": interaction_type, "direction": direction,
+        "action": action, "time": event_time,
+        "photo_url": photo_url, "photo_filename": photo_filename,
     }
-
     save_state(state)
-
     return payload
-
 
 def create_reader_runtime_state() -> dict[str, Any]:
     """Cria o estado de disponibilidade de um leitor."""
@@ -1003,7 +948,7 @@ def mark_reader_offline(
             "driver": reader.get("driver", "evo"),
             "reader_name": reader_name,
             "reader_ip": reader_ip,
-            "direction": reader["direction"],
+            "direction": reader.get("direction"),
             "status": "offline",
             "offline_since": runtime["offline_since_iso"],
             "failure_count": runtime["failures"],
@@ -1068,7 +1013,7 @@ def mark_reader_online(
             "driver": reader.get("driver", "evo"),
             "reader_name": reader_name,
             "reader_ip": reader_ip,
-            "direction": reader["direction"],
+            "direction": reader.get("direction"),
             "status": "online",
             "online_at": now_iso(),
             "offline_since": runtime["offline_since_iso"],
@@ -1124,58 +1069,32 @@ def validate_global_config(
         )
 
 
-def validate_reader_structure(
-    readers: list[dict[str, Any]],
-) -> None:
-    """
-    Valida a estrutura de todos os leitores.
-
-    Duplicidades não são tratadas nesta etapa.
-    """
-    for reader in readers:
-        for required_field in (
-            "name",
-            "ip",
-            "driver",
-            "password",
-            "direction",
-        ):
-            value = reader.get(required_field)
-
+def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
+    """Valida conexões. Nome legado mantido como alias interno."""
+    valid_interactions = {"passage", "authorization", "authentication", "attendance", "presence", "unlock"}
+    for connection in readers:
+        for required_field in ("id", "name", "host", "connector", "password", "interaction_type"):
+            value = connection.get(required_field)
             if value is None or str(value).strip() == "":
-                raise RuntimeError(
-                    f"Campo obrigatório vazio: {required_field}"
-                )
-
-        driver = str(reader.get("driver", "")).strip().lower()
-
-        if driver not in KNOWN_DRIVERS:
+                raise RuntimeError(f"Campo obrigatório vazio na conexão: {required_field}")
+        connector = str(connection.get("connector", "")).strip().lower()
+        if connector not in KNOWN_DRIVERS:
+            raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
+        if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"Driver inválido no leitor {reader['name']}: {driver}"
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.7.0. "
+                "Mantenha a conexão desativada ou selecione EVO."
             )
-
-        if reader.get("enabled", True) and driver not in SUPPORTED_DRIVERS:
-            raise RuntimeError(
-                f"O driver '{driver}' do leitor {reader['name']} "
-                "ainda não está implementado na versão 0.6.1. "
-                "Mantenha esse leitor desativado ou selecione EVO."
-            )
-
-        if reader["direction"] not in ("in", "out"):
-            raise RuntimeError(
-                f"Direção inválida no leitor "
-                f"{reader['name']}: {reader['direction']}"
-            )
-
-        if not isinstance(
-            reader.get("enabled", True),
-            bool,
-        ):
-            raise RuntimeError(
-                f"Valor enabled inválido no leitor "
-                f"{reader['name']}"
-            )
-
+        interaction = connection.get("interaction_type")
+        direction = connection.get("direction")
+        if interaction not in valid_interactions:
+            raise RuntimeError(f"Tipo de interação inválido em {connection['name']}: {interaction}")
+        if interaction == "passage" and direction not in ("in", "out"):
+            raise RuntimeError(f"Conexões do tipo passage exigem direction in ou out: {connection['name']}")
+        if interaction != "passage" and direction not in (None, "in", "out"):
+            raise RuntimeError(f"Direção inválida em {connection['name']}: {direction}")
+        if not isinstance(connection.get("enabled", True), bool):
+            raise RuntimeError(f"Valor enabled inválido na conexão {connection['name']}")
 
 def find_duplicate_values(
     readers: list[dict[str, Any]],
@@ -1344,13 +1263,13 @@ def log_reader_summary(
     active_entry_count = sum(
         1
         for reader in active_readers
-        if reader["direction"] == "in"
+        if reader.get("direction") == "in"
     )
 
     active_exit_count = sum(
         1
         for reader in active_readers
-        if reader["direction"] == "out"
+        if reader.get("direction") == "out"
     )
 
     LOGGER.info(
@@ -1414,7 +1333,7 @@ def log_reader_summary(
             "desativado pela configuração",
             reader["name"],
             reader["ip"],
-            reader["direction"],
+            reader.get("direction"),
         )
 
     for reader in active_readers:
@@ -1422,7 +1341,7 @@ def log_reader_summary(
             "[READER][%s] %s | direção=%s | ativo",
             reader["name"],
             reader["ip"],
-            reader["direction"],
+            reader.get("direction"),
         )
 
 
@@ -1500,8 +1419,8 @@ def run_polling_loop(
                 continue
 
             try:
-                data = execute_reader_command(
-                    reader=reader,
+                data = execute_connection_command(
+                    connection=reader,
                     command="getlog",
                     request_timeout=request_timeout,
                 )
@@ -1674,7 +1593,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge iniciado.")
+    LOGGER.info("Seiden Bridge 0.7.0 iniciado — Connector Foundation.")
 
     LOGGER.info(
         "Nível de log configurado: %s",
@@ -1690,7 +1609,7 @@ def main() -> None:
         all_readers,
         active_readers,
         disabled_readers,
-    ) = build_readers_from_config(config)
+    ) = build_connections_from_config(config)
 
     state = load_state()
 
