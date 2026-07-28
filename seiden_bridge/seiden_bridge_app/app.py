@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.8.0"
+BRIDGE_VERSION = "0.8.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -212,6 +212,55 @@ def build_connections_from_config(
                 if not isinstance(reader, dict):
                     raise RuntimeError("Existe um leitor inválido na configuração antiga")
                 all_connections.append(_legacy_reader_to_connection(reader, reader.get("direction", "in")))
+
+    mqtt_connections = config.get("mqtt_connections", [])
+    if not isinstance(mqtt_connections, list):
+        raise RuntimeError("mqtt_connections deve ser uma lista")
+
+    for mqtt_connection in mqtt_connections:
+        if not isinstance(mqtt_connection, dict):
+            raise RuntimeError("Existe uma conexão MQTT inválida")
+
+        topics = mqtt_connection.get("topics", [])
+        if not isinstance(topics, list) or not topics:
+            raise RuntimeError(
+                f"A conexão MQTT '{mqtt_connection.get('name', mqtt_connection.get('id', 'sem nome'))}' "
+                "deve possuir ao menos um tópico"
+            )
+
+        qos = int(mqtt_connection.get("qos", 0))
+        event_type = str(mqtt_connection.get("event_type", "mqtt.message_received"))
+        normalized_mqtt = {
+            "id": mqtt_connection.get("id"),
+            "name": mqtt_connection.get("name"),
+            "connector": "mqtt",
+            "enabled": mqtt_connection.get("enabled", True),
+            "username": mqtt_connection.get("username"),
+            "password": mqtt_connection.get("password"),
+            "client_id": mqtt_connection.get("client_id"),
+            "clean_session": mqtt_connection.get("clean_session", True),
+            "endpoint": {
+                "host": mqtt_connection.get("host", ""),
+                "port": mqtt_connection.get("port", 1883),
+                "keepalive": mqtt_connection.get("keepalive", 60),
+            },
+            "context": {
+                "interaction_type": "message",
+                "direction": None,
+            },
+            "subscriptions": [
+                {"topic": str(topic), "qos": qos, "event_type": event_type}
+                for topic in topics
+            ],
+            "tls": {
+                "enabled": mqtt_connection.get("tls_enabled", False),
+                "verify": mqtt_connection.get("tls_verify", True),
+                "ca_cert": mqtt_connection.get("ca_cert"),
+                "client_cert": mqtt_connection.get("client_cert"),
+                "client_key": mqtt_connection.get("client_key"),
+            },
+        }
+        all_connections.append(normalize_connection(normalized_mqtt))
 
     active = [item for item in all_connections if item.get("enabled", True)]
     disabled = [item for item in all_connections if not item.get("enabled", True)]
@@ -1083,7 +1132,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.0. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.1. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -1609,7 +1658,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.8.0 iniciado — MQTT Input Connector.")
+    LOGGER.info("Seiden Bridge 0.8.1 iniciado — MQTT Input Connector.")
 
     LOGGER.info(
         "Nível de log configurado: %s",

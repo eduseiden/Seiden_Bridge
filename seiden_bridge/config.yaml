@@ -1,42 +1,45 @@
-name: "Seiden Bridge"
-version: "0.8.0"
-slug: "seiden_bridge"
-description: "Camada de integração do Seiden One — EVO e MQTT Input"
-url: "https://github.com/eduseiden/Seiden-HA"
+name: Seiden Bridge
+version: 0.8.1
+slug: seiden_bridge
+description: Camada de integração do Seiden One — EVO e MQTT Input
+url: https://github.com/eduseiden/Seiden-HA
 startup: services
 boot: auto
 init: false
-arch: [amd64, aarch64]
+arch:
+- amd64
+- aarch64
 host_network: true
 hassio_api: true
 homeassistant_api: true
 map:
-  - config:rw
+- config:rw
 hassio_role: default
 options:
   poll_interval: 2
   request_timeout: 5
   max_retry_interval: 300
-  log_level: "INFO"
+  log_level: INFO
   publish_last_photo: true
   photo_max_size_mb: 5
-  ha_event: "seiden_presence"
-  mqtt_event: "seiden_bridge_event"
-  reader_offline_event: "seiden_reader_offline"
-  reader_online_event: "seiden_reader_online"
+  ha_event: seiden_presence
+  mqtt_event: seiden_bridge_event
+  reader_offline_event: seiden_reader_offline
+  reader_online_event: seiden_reader_online
   connections:
-    - id: "evo_principal"
-      name: "Entrada Principal"
-      connector: "evo"
-      enabled: true
-      password: "1234"
-      endpoint:
-        host: "192.168.4.157"
-        scheme: "http"
-        path: "/api"
-      context:
-        interaction_type: "passage"
-        direction: "in"
+  - id: evo_principal
+    name: Entrada Principal
+    connector: evo
+    enabled: true
+    password: '1234'
+    endpoint:
+      host: 192.168.4.157
+      scheme: http
+      path: /api
+    context:
+      interaction_type: passage
+      direction: in
+  mqtt_connections: []
 schema:
   poll_interval: int
   request_timeout: int
@@ -49,30 +52,35 @@ schema:
   reader_offline_event: str
   reader_online_event: str
   connections:
-    - id: str
-      name: str
-      connector: list(evo|mqtt|control_id|hikvision|intelbras)
-      enabled: bool
-      password?: password
-      username?: str
-      client_id?: str
-      clean_session?: bool
-      endpoint:
-        host: str
-        scheme?: list(http|https)
-        path?: str
-        port?: int
-        keepalive?: int
-      context?:
-        interaction_type?: list(passage|authorization|authentication|attendance|presence|unlock|message|telemetry)
-        direction?: list(in|out|none)
-      subscriptions?:
-        - topic: str
-          qos: int
-          event_type?: str
-      tls?:
-        enabled: bool
-        verify?: bool
-        ca_cert?: str
-        client_cert?: str
-        client_key?: str
+  - id: str
+    name: str
+    connector: list(evo|control_id|hikvision|intelbras)
+    enabled: bool
+    password: password
+    endpoint:
+      host: str
+      scheme: list(http|https)
+      path: str
+    context:
+      interaction_type: list(passage|authorization|authentication|attendance|presence|unlock)
+      direction: list(in|out|none)
+  mqtt_connections:
+  - id: str
+    name: str
+    enabled: bool
+    host: str
+    port: port
+    username: str?
+    password: password?
+    client_id: str?
+    clean_session: bool
+    keepalive: int
+    qos: int(0,2)
+    event_type: str
+    topics:
+    - str
+    tls_enabled: bool
+    tls_verify: bool
+    ca_cert: str?
+    client_cert: str?
+    client_key: str?

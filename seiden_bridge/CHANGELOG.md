@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 — Correção de instalação
+
+- Corrige a sintaxe de campos opcionais no schema do Home Assistant Supervisor.
+- Evita o erro `Missing option 'scheme?' in endpoint` durante atualização/instalação.
+- Mantém integralmente os conectores EVO e MQTT introduzidos na 0.8.0.
+
 ## 0.8.0 — MQTT Input Connector
 
 - preserva o funcionamento EVO e a compatibilidade da 0.7.0;
