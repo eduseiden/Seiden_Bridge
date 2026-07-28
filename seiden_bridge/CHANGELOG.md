@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — Arquitetura unificada sem legado
+
+- Remove `seiden_presence`, `seiden_reader_online` e `seiden_reader_offline`.
+- Remove `legacy_events_enabled`, `ha_event`, `mqtt_event`, `reader_online_event` e `reader_offline_event`.
+- EVO e MQTT publicam exclusivamente em `seiden_bridge_event`.
+- Conectividade usa exclusivamente `seiden_connection_online` e `seiden_connection_offline`.
+- Elimina duplicidade de eventos durante passagens EVO.
+
+# Changelog
+
 ## 0.8.3 — Eventos unificados e configuração MQTT
 
 - Adicionado `bridge_event`, usado como evento principal por EVO e MQTT.

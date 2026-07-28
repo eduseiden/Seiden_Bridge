@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.8.3"
+BRIDGE_VERSION = "0.9.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -32,10 +32,7 @@ LAST_PHOTO_PUBLIC_URL = "/local/seiden_bridge/latest.jpg"
 DASHBOARD_PUBLISH_INTERVAL = 60
 
 DEFAULT_BRIDGE_EVENT = "seiden_bridge_event"
-DEFAULT_PRESENCE_EVENT = "seiden_presence"
-DEFAULT_READER_OFFLINE_EVENT = "seiden_reader_offline"
 DEFAULT_CONNECTION_OFFLINE_EVENT = "seiden_connection_offline"
-DEFAULT_READER_ONLINE_EVENT = "seiden_reader_online"
 DEFAULT_CONNECTION_ONLINE_EVENT = "seiden_connection_online"
 
 IDLE_SLEEP_SECONDS = 60
@@ -1161,7 +1158,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.3. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.9.0. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -1687,7 +1684,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.8.3 iniciado — MQTT Input Connector.")
+    LOGGER.info("Seiden Bridge 0.9.0 iniciado — arquitetura unificada.")
 
     LOGGER.info(
         "Nível de log configurado: %s",
@@ -1743,26 +1740,11 @@ def main() -> None:
     connection_online_event = str(
         config.get("connection_online_event", DEFAULT_CONNECTION_ONLINE_EVENT)
     )
-    legacy_events_enabled = bool(config.get("legacy_events_enabled", True))
-
-    legacy_presence_event = str(config.get("ha_event", DEFAULT_PRESENCE_EVENT))
-    legacy_mqtt_event = str(config.get("mqtt_event", DEFAULT_BRIDGE_EVENT))
-    legacy_reader_offline_event = str(
-        config.get("reader_offline_event", DEFAULT_READER_OFFLINE_EVENT)
-    )
-    legacy_reader_online_event = str(
-        config.get("reader_online_event", DEFAULT_READER_ONLINE_EVENT)
-    )
-
+    # A partir da 0.9.0 existe apenas a arquitetura unificada.
     evo_bridge_events = [bridge_event]
     mqtt_bridge_events = [bridge_event]
     offline_events = [connection_offline_event]
     online_events = [connection_online_event]
-    if legacy_events_enabled:
-        evo_bridge_events.append(legacy_presence_event)
-        mqtt_bridge_events.append(legacy_mqtt_event)
-        offline_events.append(legacy_reader_offline_event)
-        online_events.append(legacy_reader_online_event)
 
     validate_global_config(
         poll_interval=poll_interval,

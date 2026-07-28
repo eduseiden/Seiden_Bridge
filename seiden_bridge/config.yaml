@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.8.3
+version: 0.9.0
 slug: seiden_bridge
 description: Camada de integração do Seiden One — eventos unificados para EVO e MQTT
 url: https://github.com/eduseiden/Seiden-HA
@@ -25,11 +25,6 @@ options:
   bridge_event: seiden_bridge_event
   connection_offline_event: seiden_connection_offline
   connection_online_event: seiden_connection_online
-  legacy_events_enabled: true
-  ha_event: seiden_presence
-  mqtt_event: seiden_bridge_event
-  reader_offline_event: seiden_reader_offline
-  reader_online_event: seiden_reader_online
   connections:
   - id: evo_principal
     name: Entrada Principal
@@ -54,11 +49,6 @@ schema:
   bridge_event: str
   connection_offline_event: str
   connection_online_event: str
-  legacy_events_enabled: bool
-  ha_event: str?
-  mqtt_event: str?
-  reader_offline_event: str?
-  reader_online_event: str?
   connections:
   - id: str
     name: str
