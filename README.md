@@ -1,15 +1,15 @@
-# Seiden Bridge 0.8.2
+# Seiden Bridge 0.8.2.1
 
 ## EVO + MQTT Input Connector
 
 O **Seiden Bridge** é a camada de integração do **Seiden One**. Ele captura eventos de diferentes origens, normaliza suas estruturas e os publica para consumo por outros componentes, sem realizar correlação ou interpretação operacional.
 
-A versão **0.8.2** preserva o funcionamento construído para o **EVO** na versão 0.7.0 e adiciona o **MQTT** como primeira origem assíncrona de eventos.
+A versão **0.8.2.1** preserva o funcionamento construído para o **EVO** na versão 0.7.0 e adiciona o **MQTT** como primeira origem assíncrona de eventos.
 
 > **Seiden Bridge transforma eventos de múltiplas origens em eventos padronizados.**
 
 
-## Configuração MQTT na 0.8.2
+## Configuração MQTT na 0.8.2.1
 
 Para manter compatibilidade integral com as conexões EVO da 0.7.0 e respeitar o limite de profundidade do schema do Home Assistant, as origens MQTT são configuradas em `mqtt_connections`:
 
@@ -36,7 +36,7 @@ mqtt_connections:
 
 As conexões EVO continuam no bloco `connections`, sem qualquer mudança de formato.
 
-## O que existe na versão 0.8.2
+## O que existe na versão 0.8.2.1
 
 - conector EVO por polling;
 - conector MQTT por assinatura de tópicos;
@@ -223,7 +223,7 @@ Conectores ainda não implementados podem permanecer cadastrados somente com `en
 
 ## Entidades EVO mantidas
 
-A versão 0.8.2 mantém as entidades operacionais já existentes para o EVO:
+A versão 0.8.2.1 mantém as entidades operacionais já existentes para o EVO:
 
 ```text
 binary_sensor.seiden_bridge_running
@@ -317,11 +317,11 @@ Home Assistant
 - `amd64`: mini PCs Intel/AMD;
 - `aarch64`: Raspberry Pi 5 e outros equipamentos ARM64.
 
-## Atualização da 0.7.0 para a 0.8.2
+## Atualização da 0.7.0 para a 0.8.2.1
 
 1. Faça backup da configuração atual.
 2. Atualize o repositório de add-ons.
-3. Instale ou atualize o Seiden Bridge para a versão 0.8.2.
+3. Instale ou atualize o Seiden Bridge para a versão 0.8.2.1.
 4. Mantenha as conexões EVO existentes.
 5. Adicione uma conexão MQTT somente quando desejar utilizá-la.
 6. Inicie o add-on e confira os logs.
@@ -330,4 +330,4 @@ Home Assistant
 
 ## Histórico desta versão
 
-A versão 0.7.0 criou a base de conectores e introduziu `connections` como modelo principal. A versão 0.8.2 utiliza essa base para adicionar o MQTT sem remover ou substituir o conector EVO.
+A versão 0.7.0 criou a base de conectores e introduziu `connections` como modelo principal. A versão 0.8.2.1 utiliza essa base para adicionar o MQTT sem remover ou substituir o conector EVO.

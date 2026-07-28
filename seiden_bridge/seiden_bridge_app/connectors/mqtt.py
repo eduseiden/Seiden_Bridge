@@ -1,4 +1,4 @@
-"""Conector MQTT de entrada do Seiden Bridge 0.8.2."""
+"""Conector MQTT de entrada do Seiden Bridge 0.8.2.1."""
 from __future__ import annotations
 
 import json

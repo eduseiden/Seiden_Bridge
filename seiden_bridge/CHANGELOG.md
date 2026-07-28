@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.8.2 — Correção de instalação
+## 0.8.2.1 — Correção de schema MQTT
+
+- Corrigida a validação de `mqtt_connections` no schema do add-on.
+- Campos com valores padrão deixaram de ser exigidos pelo Supervisor ao salvar a configuração.
+- Mantido integralmente o funcionamento do conector EVO.
+- Mantidas as correções de proteção das credenciais MQTT nos logs.
+
+## 0.8.2
+
+- Corrige o schema das conexões MQTT: campos com valores padrão passam a ser opcionais na validação do Supervisor.
+- Evita falhas de salvamento quando a interface omite booleanos ou valores padrão, como `enabled`, `clean_session`, `qos` e opções TLS.
+- Mantém `id`, `name`, `host` e `topics` como campos obrigatórios.
+- Protege senha MQTT e chave privada TLS nos logs.
+- Alinha as referências internas de versão.
+
+## 0.8.1 — Correção de instalação
 
 - Corrige a sintaxe de campos opcionais no schema do Home Assistant Supervisor.
 - Evita o erro `Missing option 'scheme?' in endpoint` durante atualização/instalação.

@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.8.2"
+BRIDGE_VERSION = "0.8.2.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -108,21 +108,23 @@ def sanitize_config_for_log(
         "connections",
         "mqtt_connections",
     ):
-        sanitized[key] = [
-            {
-                **item,
-                "password": "***" if item.get("password") else item.get("password"),
-                "client_key": "***" if item.get("client_key") else item.get("client_key"),
-            }
-            for item in config.get(key, [])
-            if isinstance(item, dict)
-        ]
+        sanitized_items = []
+        for item in config.get(key, []):
+            if not isinstance(item, dict):
+                continue
+            safe_item = dict(item)
+            if "password" in safe_item:
+                safe_item["password"] = "***"
+            if "client_key" in safe_item and safe_item.get("client_key"):
+                safe_item["client_key"] = "***"
+            sanitized_items.append(safe_item)
+        sanitized[key] = sanitized_items
 
     return sanitized
 
 
 def normalize_connection(connection: dict[str, Any]) -> dict[str, Any]:
-    """Normaliza uma conexão para o núcleo 0.7.0.
+    """Normaliza uma conexão para o núcleo do Seiden Bridge.
 
     O formato interno preserva aliases antigos (reader/driver/ip) para manter
     compatibilidade operacional enquanto o EVO migra para a nova fundação.
@@ -1134,7 +1136,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.2. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.2.1. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -1660,7 +1662,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.8.2 iniciado — MQTT Input Connector.")
+    LOGGER.info("Seiden Bridge 0.8.2.1 iniciado — MQTT Input Connector.")
 
     LOGGER.info(
         "Nível de log configurado: %s",

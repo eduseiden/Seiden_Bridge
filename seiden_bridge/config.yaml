@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.8.2
+version: 0.8.2.1
 slug: seiden_bridge
 description: Camada de integração do Seiden One — EVO e MQTT Input
 url: https://github.com/eduseiden/Seiden-HA
@@ -67,20 +67,20 @@ schema:
   mqtt_connections:
   - id: str
     name: str
-    enabled: bool
+    enabled: bool?
     host: str
-    port: port
+    port: port?
     username: str?
     password: password?
     client_id: str?
-    clean_session: bool
-    keepalive: int
-    qos: int(0,2)
-    event_type: str
+    clean_session: bool?
+    keepalive: int?
+    qos: int(0,2)?
+    event_type: str?
     topics:
     - str
-    tls_enabled: bool
-    tls_verify: bool
+    tls_enabled: bool?
+    tls_verify: bool?
     ca_cert: str?
     client_cert: str?
     client_key: str?
