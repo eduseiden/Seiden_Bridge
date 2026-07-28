@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.8.2.1 — Correção de schema MQTT
+## 0.8.2.2 — Compatibilidade com Paho MQTT 2.x
+
+- Corrige a exceção `TypeError` nos callbacks `on_connect` e `on_disconnect`.
+- Trata corretamente objetos `ReasonCode` da Callback API v2 do Paho MQTT.
+- Preserva integralmente o funcionamento do conector EVO e a configuração MQTT da versão anterior.
+
+## 0.8.2.2 — Correção de schema MQTT
 
 - Corrigida a validação de `mqtt_connections` no schema do add-on.
 - Campos com valores padrão deixaram de ser exigidos pelo Supervisor ao salvar a configuração.

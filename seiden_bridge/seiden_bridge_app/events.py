@@ -1,4 +1,4 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.8.2.1."""
+"""Modelo canônico de eventos do Seiden Bridge 0.8.2.2."""
 from datetime import datetime
 from typing import Any
 from uuid import uuid4

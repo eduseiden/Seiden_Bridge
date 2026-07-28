@@ -1,4 +1,4 @@
-"""Conector MQTT de entrada do Seiden Bridge 0.8.2.1."""
+"""Conector MQTT de entrada do Seiden Bridge 0.8.2.2."""
 from __future__ import annotations
 
 import json
@@ -62,8 +62,25 @@ class MqttConnector(BaseConnector):
 
         subscriptions = connection.get("subscriptions") or []
 
+        def reason_code_failed(reason_code: Any) -> bool:
+            """Compatibiliza códigos de retorno entre Paho MQTT 1.x e 2.x."""
+            is_failure = getattr(reason_code, "is_failure", None)
+            if is_failure is not None:
+                return bool(is_failure)
+
+            value = getattr(reason_code, "value", reason_code)
+            try:
+                return int(value) != 0
+            except (TypeError, ValueError):
+                LOGGER.warning(
+                    "[MQTT][%s] Código MQTT não reconhecido: %r",
+                    connection["name"],
+                    reason_code,
+                )
+                return True
+
         def on_connect(client_obj: mqtt.Client, userdata: Any, flags: Any, reason_code: Any, properties: Any) -> None:
-            if int(reason_code) != 0:
+            if reason_code_failed(reason_code):
                 LOGGER.error("[MQTT][%s] Falha ao conectar: %s", connection["name"], reason_code)
                 return
             LOGGER.info("[MQTT][%s] Conectado a %s:%s", connection["name"], host, port)
@@ -74,7 +91,7 @@ class MqttConnector(BaseConnector):
                 LOGGER.info("[MQTT][%s] Assinando %s (QoS %d)", connection["name"], topic, qos)
 
         def on_disconnect(client_obj: mqtt.Client, userdata: Any, disconnect_flags: Any, reason_code: Any, properties: Any) -> None:
-            if int(reason_code) != 0:
+            if reason_code_failed(reason_code):
                 LOGGER.warning("[MQTT][%s] Desconectado inesperadamente: %s", connection["name"], reason_code)
 
         def on_message(client_obj: mqtt.Client, userdata: Any, message: mqtt.MQTTMessage) -> None:
