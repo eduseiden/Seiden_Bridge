@@ -1,15 +1,24 @@
-# Seiden Bridge 0.8.2.2
+# Seiden Bridge 0.8.3
+
+## Novidades da versão 0.8.3
+
+- **Evento unificado:** EVO e MQTT publicam em `seiden_bridge_event`. A origem é identificada dentro do payload por `connector`, `connection` e `event_type`.
+- **Conectividade genérica:** os eventos principais passam a ser `seiden_connection_online` e `seiden_connection_offline`.
+- **Compatibilidade de transição:** `legacy_events_enabled: true` mantém `seiden_presence`, `seiden_reader_online` e `seiden_reader_offline` enquanto Vision e FLOW ainda são ajustados.
+- **Edição MQTT:** as conexões existentes podem ser abertas pelo ícone de lápis, alteradas e salvas sem exclusão/recriação. Campos opcionais e senha permanecem compatíveis com a interface do Supervisor.
+- **Configuração consistente:** `options` e `schema` foram alinhados para reduzir divergências entre os valores salvos e os exibidos. O recarregamento visual da página após salvar continua sendo controlado pelo frontend do Home Assistant; em algumas versões do Supervisor ainda pode ser necessário atualizar a página.
+
 
 ## EVO + MQTT Input Connector
 
 O **Seiden Bridge** é a camada de integração do **Seiden One**. Ele captura eventos de diferentes origens, normaliza suas estruturas e os publica para consumo por outros componentes, sem realizar correlação ou interpretação operacional.
 
-A versão **0.8.2.2** preserva o funcionamento construído para o **EVO** na versão 0.7.0 e adiciona o **MQTT** como primeira origem assíncrona de eventos.
+A versão **0.8.3** preserva o funcionamento construído para o **EVO** na versão 0.7.0 e adiciona o **MQTT** como primeira origem assíncrona de eventos.
 
 > **Seiden Bridge transforma eventos de múltiplas origens em eventos padronizados.**
 
 
-## Configuração MQTT na 0.8.2.2
+## Configuração MQTT na 0.8.3
 
 Para manter compatibilidade integral com as conexões EVO da 0.7.0 e respeitar o limite de profundidade do schema do Home Assistant, as origens MQTT são configuradas em `mqtt_connections`:
 
@@ -36,7 +45,7 @@ mqtt_connections:
 
 As conexões EVO continuam no bloco `connections`, sem qualquer mudança de formato.
 
-## O que existe na versão 0.8.2.2
+## O que existe na versão 0.8.3
 
 - conector EVO por polling;
 - conector MQTT por assinatura de tópicos;
@@ -107,91 +116,26 @@ connections:
 ### MQTT
 
 ```yaml
-mqtt_event: seiden_bridge_event
-
-connections:
+mqtt_connections:
   - id: mqtt_casa
     name: MQTT Casa
-    connector: mqtt
     enabled: true
-    username: seiden_bridge
+    host: core-mosquitto
+    port: 1883
+    username: mqtt_seiden_bridge
     password: "senha"
     client_id: seiden_bridge_casa
     clean_session: true
-
-    endpoint:
-      host: 192.168.1.10
-      port: 1883
-      keepalive: 60
-
-    context:
-      interaction_type: message
-      direction: none
-
-    subscriptions:
-      - topic: zigbee2mqtt/FechaduraSala
-        qos: 0
-        event_type: lock.telemetry_received
-
-      - topic: zigbee2mqtt/SensorPortaSala
-        qos: 0
-        event_type: door.telemetry_received
+    keepalive: 60
+    qos: 0
+    event_type: mqtt.message_received
+    topics:
+      - zigbee2mqtt/yale_sala
+    tls_enabled: false
+    tls_verify: false
 ```
 
-## Evento MQTT publicado no Home Assistant
-
-Por padrão, mensagens MQTT normalizadas são publicadas no evento:
-
-```text
-seiden_bridge_event
-```
-
-O nome pode ser alterado pela opção `mqtt_event`.
-
-Estrutura lógica do evento:
-
-```json
-{
-  "schema_version": "2.0",
-  "event_id": "uuid",
-  "event_type": "door.telemetry_received",
-  "timestamp": "2026-07-28T14:30:00-03:00",
-  "connection": {
-    "id": "mqtt_casa",
-    "name": "MQTT Casa",
-    "connector": "mqtt"
-  },
-  "context": {
-    "interaction_type": "message",
-    "direction": "none"
-  },
-  "data": {
-    "topic": "zigbee2mqtt/SensorPortaSala",
-    "payload": {
-      "contact": false,
-      "battery": 82
-    }
-  },
-  "raw": {
-    "topic": "zigbee2mqtt/SensorPortaSala",
-    "payload": {
-      "contact": false,
-      "battery": 82
-    }
-  }
-}
-```
-
-## TLS no MQTT
-
-```yaml
-tls:
-  enabled: true
-  verify: true
-  ca_cert: /ssl/ca.crt
-  client_cert: /ssl/client.crt
-  client_key: /ssl/client.key
-```
+As conexões MQTT já criadas podem ser abertas pelo ícone de lápis na tela **Configuration**. O Supervisor grava a alteração e reinicia o add-on. Dependendo da versão do frontend, a lista visual pode permanecer em cache até o recarregamento da página; isso não significa que o valor não tenha sido salvo.
 
 ## Configurações gerais
 
@@ -203,6 +147,12 @@ log_level: INFO
 publish_last_photo: true
 photo_max_size_mb: 5
 
+bridge_event: seiden_bridge_event
+connection_offline_event: seiden_connection_offline
+connection_online_event: seiden_connection_online
+legacy_events_enabled: true
+
+# aliases temporários para Vision/FLOW atuais
 ha_event: seiden_presence
 mqtt_event: seiden_bridge_event
 reader_offline_event: seiden_reader_offline
@@ -223,7 +173,7 @@ Conectores ainda não implementados podem permanecer cadastrados somente com `en
 
 ## Entidades EVO mantidas
 
-A versão 0.8.2.2 mantém as entidades operacionais já existentes para o EVO:
+A versão 0.8.3 mantém as entidades operacionais já existentes para o EVO:
 
 ```text
 binary_sensor.seiden_bridge_running
@@ -317,11 +267,11 @@ Home Assistant
 - `amd64`: mini PCs Intel/AMD;
 - `aarch64`: Raspberry Pi 5 e outros equipamentos ARM64.
 
-## Atualização da 0.7.0 para a 0.8.2.2
+## Atualização da 0.7.0 para a 0.8.3
 
 1. Faça backup da configuração atual.
 2. Atualize o repositório de add-ons.
-3. Instale ou atualize o Seiden Bridge para a versão 0.8.2.2.
+3. Instale ou atualize o Seiden Bridge para a versão 0.8.3.
 4. Mantenha as conexões EVO existentes.
 5. Adicione uma conexão MQTT somente quando desejar utilizá-la.
 6. Inicie o add-on e confira os logs.
@@ -330,4 +280,4 @@ Home Assistant
 
 ## Histórico desta versão
 
-A versão 0.7.0 criou a base de conectores e introduziu `connections` como modelo principal. A versão 0.8.2.2 utiliza essa base para adicionar o MQTT sem remover ou substituir o conector EVO.
+A versão 0.7.0 criou a base de conectores e introduziu `connections` como modelo principal. A versão 0.8.3 utiliza essa base para adicionar o MQTT sem remover ou substituir o conector EVO.

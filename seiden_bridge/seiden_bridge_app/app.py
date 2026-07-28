@@ -24,13 +24,14 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.8.2.2"
+BRIDGE_VERSION = "0.8.3"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
 LAST_PHOTO_PUBLIC_URL = "/local/seiden_bridge/latest.jpg"
 DASHBOARD_PUBLISH_INTERVAL = 60
 
+DEFAULT_BRIDGE_EVENT = "seiden_bridge_event"
 DEFAULT_PRESENCE_EVENT = "seiden_presence"
 DEFAULT_READER_OFFLINE_EVENT = "seiden_reader_offline"
 DEFAULT_CONNECTION_OFFLINE_EVENT = "seiden_connection_offline"
@@ -445,6 +446,30 @@ def safe_fire_ha_event(
         return False
 
 
+
+
+def fire_event_names(
+    *,
+    supervisor_token: str,
+    event_names: list[str],
+    payload: dict[str, Any],
+    request_timeout: int,
+) -> bool:
+    """Publica o mesmo payload em nomes únicos, preservando aliases legados."""
+    sent = False
+    seen: set[str] = set()
+    for event_name in event_names:
+        normalized = str(event_name or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        sent = safe_fire_ha_event(
+            supervisor_token=supervisor_token,
+            event_type=normalized,
+            payload=payload,
+            request_timeout=request_timeout,
+        ) or sent
+    return sent
 
 def slugify_entity(value: str) -> str:
     """Converte um nome em identificador seguro para entidade do HA."""
@@ -953,7 +978,7 @@ def mark_reader_offline(
     poll_interval: int,
     max_retry_interval: int,
     supervisor_token: str,
-    offline_event: str,
+    offline_events: list[str],
     request_timeout: int,
 ) -> None:
     """Marca um leitor como indisponível."""
@@ -1011,9 +1036,9 @@ def mark_reader_offline(
             "error_detail": str(error),
         }
 
-        safe_fire_ha_event(
+        fire_event_names(
             supervisor_token=supervisor_token,
-            event_type=offline_event,
+            event_names=offline_events,
             payload=offline_payload,
             request_timeout=request_timeout,
         )
@@ -1038,7 +1063,7 @@ def mark_reader_online(
     reader: dict[str, Any],
     runtime: dict[str, Any],
     supervisor_token: str,
-    online_event: str,
+    online_events: list[str],
     request_timeout: int,
 ) -> None:
     """Restaura o leitor ao estado online."""
@@ -1075,9 +1100,9 @@ def mark_reader_online(
             "previous_failure_count": runtime["failures"],
         }
 
-        safe_fire_ha_event(
+        fire_event_names(
             supervisor_token=supervisor_token,
-            event_type=online_event,
+            event_names=online_events,
             payload=online_payload,
             request_timeout=request_timeout,
         )
@@ -1136,7 +1161,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.2.2. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.3. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -1446,9 +1471,9 @@ def run_polling_loop(
     readers: list[dict[str, Any]],
     state: dict[str, Any],
     supervisor_token: str,
-    presence_event: str,
-    reader_offline_event: str,
-    reader_online_event: str,
+    bridge_events: list[str],
+    connection_offline_events: list[str],
+    connection_online_events: list[str],
     poll_interval: int,
     request_timeout: int,
     max_retry_interval: int,
@@ -1503,7 +1528,7 @@ def run_polling_loop(
                     reader=reader,
                     runtime=runtime,
                     supervisor_token=supervisor_token,
-                    online_event=reader_online_event,
+                    online_events=connection_online_events,
                     request_timeout=request_timeout,
                 )
 
@@ -1565,9 +1590,9 @@ def run_polling_loop(
                     "time": presence_payload["time"],
                 }
 
-                event_sent = safe_fire_ha_event(
+                event_sent = fire_event_names(
                     supervisor_token=supervisor_token,
-                    event_type=presence_event,
+                    event_names=bridge_events,
                     payload=presence_payload,
                     request_timeout=request_timeout,
                 )
@@ -1615,7 +1640,7 @@ def run_polling_loop(
                     poll_interval=poll_interval,
                     max_retry_interval=max_retry_interval,
                     supervisor_token=supervisor_token,
-                    offline_event=reader_offline_event,
+                    offline_events=connection_offline_events,
                     request_timeout=request_timeout,
                 )
 
@@ -1662,7 +1687,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.8.2.2 iniciado — MQTT Input Connector.")
+    LOGGER.info("Seiden Bridge 0.8.3 iniciado — MQTT Input Connector.")
 
     LOGGER.info(
         "Nível de log configurado: %s",
@@ -1711,20 +1736,33 @@ def main() -> None:
         config.get("photo_max_size_mb", 5)
     )
 
-    presence_event = config.get(
-        "ha_event",
-        DEFAULT_PRESENCE_EVENT,
+    bridge_event = str(config.get("bridge_event", DEFAULT_BRIDGE_EVENT))
+    connection_offline_event = str(
+        config.get("connection_offline_event", DEFAULT_CONNECTION_OFFLINE_EVENT)
+    )
+    connection_online_event = str(
+        config.get("connection_online_event", DEFAULT_CONNECTION_ONLINE_EVENT)
+    )
+    legacy_events_enabled = bool(config.get("legacy_events_enabled", True))
+
+    legacy_presence_event = str(config.get("ha_event", DEFAULT_PRESENCE_EVENT))
+    legacy_mqtt_event = str(config.get("mqtt_event", DEFAULT_BRIDGE_EVENT))
+    legacy_reader_offline_event = str(
+        config.get("reader_offline_event", DEFAULT_READER_OFFLINE_EVENT)
+    )
+    legacy_reader_online_event = str(
+        config.get("reader_online_event", DEFAULT_READER_ONLINE_EVENT)
     )
 
-    reader_offline_event = config.get(
-        "reader_offline_event",
-        DEFAULT_READER_OFFLINE_EVENT,
-    )
-
-    reader_online_event = config.get(
-        "reader_online_event",
-        DEFAULT_READER_ONLINE_EVENT,
-    )
+    evo_bridge_events = [bridge_event]
+    mqtt_bridge_events = [bridge_event]
+    offline_events = [connection_offline_event]
+    online_events = [connection_online_event]
+    if legacy_events_enabled:
+        evo_bridge_events.append(legacy_presence_event)
+        mqtt_bridge_events.append(legacy_mqtt_event)
+        offline_events.append(legacy_reader_offline_event)
+        online_events.append(legacy_reader_online_event)
 
     validate_global_config(
         poll_interval=poll_interval,
@@ -1758,14 +1796,13 @@ def main() -> None:
     mqtt_connections = [item for item in active_readers if item.get("connector") == "mqtt"]
 
     mqtt_clients = []
-    mqtt_event_name = str(config.get("mqtt_event", "seiden_bridge_event"))
     for connection in mqtt_connections:
         connector = get_connector("mqtt")
         client = connector.start(
             connection,
-            lambda conn, topic, payload, raw: safe_fire_ha_event(
+            lambda conn, topic, payload, raw: fire_event_names(
                 supervisor_token=supervisor_token,
-                event_type=mqtt_event_name,
+                event_names=mqtt_bridge_events,
                 payload=create_mqtt_event(connection=conn, topic=topic, payload=payload),
                 request_timeout=request_timeout,
             ),
@@ -1776,9 +1813,9 @@ def main() -> None:
         active_readers=polling_readers,
         disabled_readers=disabled_readers,
         state=state,
-        presence_event=presence_event,
-        reader_offline_event=reader_offline_event,
-        reader_online_event=reader_online_event,
+        presence_event=bridge_event,
+        reader_offline_event=connection_offline_event,
+        reader_online_event=connection_online_event,
         poll_interval=poll_interval,
         request_timeout=request_timeout,
         max_retry_interval=max_retry_interval,
@@ -1800,9 +1837,9 @@ def main() -> None:
         readers=polling_readers,
         state=state,
         supervisor_token=supervisor_token,
-        presence_event=presence_event,
-        reader_offline_event=reader_offline_event,
-        reader_online_event=reader_online_event,
+        bridge_events=evo_bridge_events,
+        connection_offline_events=offline_events,
+        connection_online_events=online_events,
         poll_interval=poll_interval,
         request_timeout=request_timeout,
         max_retry_interval=max_retry_interval,

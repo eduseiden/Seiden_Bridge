@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.3 — Eventos unificados e configuração MQTT
+
+- Adicionado `bridge_event`, usado como evento principal por EVO e MQTT.
+- Adicionados `connection_online_event` e `connection_offline_event`.
+- Adicionado `legacy_events_enabled` para manter temporariamente os eventos antigos.
+- EVO publica simultaneamente em `seiden_bridge_event` e `seiden_presence` durante a transição.
+- MQTT continua em `seiden_bridge_event`, evitando publicação duplicada quando o alias legado possui o mesmo nome.
+- Saúde do EVO publica eventos genéricos e, durante a transição, os aliases de leitor.
+- Schema MQTT mantido editável pela interface do Supervisor, inclusive para conexões já existentes.
+- Documentada a limitação do frontend do Home Assistant: o add-on não possui API para forçar o recarregamento visual da tela Configuration após salvar.
+
 ## 0.8.2.2 — Compatibilidade com Paho MQTT 2.x
 
 - Corrige a exceção `TypeError` nos callbacks `on_connect` e `on_disconnect`.
