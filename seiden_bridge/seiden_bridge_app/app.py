@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.8.1"
+BRIDGE_VERSION = "0.8.2"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -106,14 +106,16 @@ def sanitize_config_for_log(
         "exit_readers",
         "readers",
         "connections",
+        "mqtt_connections",
     ):
         sanitized[key] = [
             {
-                **reader,
-                "password": "***",
+                **item,
+                "password": "***" if item.get("password") else item.get("password"),
+                "client_key": "***" if item.get("client_key") else item.get("client_key"),
             }
-            for reader in config.get(key, [])
-            if isinstance(reader, dict)
+            for item in config.get(key, [])
+            if isinstance(item, dict)
         ]
 
     return sanitized
@@ -1132,7 +1134,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.1. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.2. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -1658,7 +1660,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.8.1 iniciado — MQTT Input Connector.")
+    LOGGER.info("Seiden Bridge 0.8.2 iniciado — MQTT Input Connector.")
 
     LOGGER.info(
         "Nível de log configurado: %s",

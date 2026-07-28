@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.8.1
+version: 0.8.2
 slug: seiden_bridge
 description: Camada de integração do Seiden One — EVO e MQTT Input
 url: https://github.com/eduseiden/Seiden-HA

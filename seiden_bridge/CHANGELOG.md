@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.1 — Correção de instalação
+## 0.8.2 — Correção de instalação
 
 - Corrige a sintaxe de campos opcionais no schema do Home Assistant Supervisor.
 - Evita o erro `Missing option 'scheme?' in endpoint` durante atualização/instalação.
