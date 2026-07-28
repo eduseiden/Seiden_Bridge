@@ -11,8 +11,8 @@ import re
 
 import requests
 
-from .connectors import execute_connection_command
-from .events import create_presence_event
+from .connectors import execute_connection_command, get_connector
+from .events import create_presence_event, create_mqtt_event
 
 
 CONFIG_PATH = Path("/data/options.json")
@@ -22,9 +22,9 @@ DEFAULT_POLL_INTERVAL = 2
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
-SUPPORTED_DRIVERS = {"evo"}
-KNOWN_DRIVERS = {"evo", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.7.0"
+SUPPORTED_DRIVERS = {"evo", "mqtt"}
+KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
+BRIDGE_VERSION = "0.8.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -129,7 +129,8 @@ def normalize_connection(connection: dict[str, Any]) -> dict[str, Any]:
     context = connection.get("context") or {}
     connector = str(connection.get("connector", connection.get("driver", "evo"))).strip().lower()
     host = str(endpoint.get("host", connection.get("ip", ""))).strip()
-    interaction_type = str(context.get("interaction_type", connection.get("interaction_type", "passage"))).strip().lower()
+    default_interaction = "message" if connector == "mqtt" else "passage"
+    interaction_type = str(context.get("interaction_type", connection.get("interaction_type", default_interaction))).strip().lower()
     direction = context.get("direction", connection.get("direction"))
     if direction in ("none", "", None):
         direction = None
@@ -1070,10 +1071,10 @@ def validate_global_config(
 
 
 def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
-    """Valida conexões. Nome legado mantido como alias interno."""
-    valid_interactions = {"passage", "authorization", "authentication", "attendance", "presence", "unlock"}
+    """Valida conexões de polling e streaming."""
+    valid_interactions = {"passage", "authorization", "authentication", "attendance", "presence", "unlock", "message", "telemetry"}
     for connection in readers:
-        for required_field in ("id", "name", "host", "connector", "password", "interaction_type"):
+        for required_field in ("id", "name", "host", "connector"):
             value = connection.get(required_field)
             if value is None or str(value).strip() == "":
                 raise RuntimeError(f"Campo obrigatório vazio na conexão: {required_field}")
@@ -1082,9 +1083,26 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.7.0. "
-                "Mantenha a conexão desativada ou selecione EVO."
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.8.0. "
+                "Mantenha a conexão desativada ou selecione EVO/MQTT."
             )
+        if not isinstance(connection.get("enabled", True), bool):
+            raise RuntimeError(f"Valor enabled inválido na conexão {connection['name']}")
+
+        if connector == "mqtt":
+            subscriptions = connection.get("subscriptions")
+            if not isinstance(subscriptions, list) or not subscriptions:
+                raise RuntimeError(f"A conexão MQTT {connection['name']} exige ao menos uma subscription")
+            for subscription in subscriptions:
+                if not isinstance(subscription, dict) or not str(subscription.get("topic", "")).strip():
+                    raise RuntimeError(f"Subscription MQTT inválida em {connection['name']}")
+                qos = int(subscription.get("qos", 0))
+                if qos not in (0, 1, 2):
+                    raise RuntimeError(f"QoS inválido em {connection['name']}: {qos}")
+            continue
+
+        if not str(connection.get("password", "")).strip():
+            raise RuntimeError(f"Campo obrigatório vazio na conexão EVO: password")
         interaction = connection.get("interaction_type")
         direction = connection.get("direction")
         if interaction not in valid_interactions:
@@ -1093,8 +1111,6 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conexões do tipo passage exigem direction in ou out: {connection['name']}")
         if interaction != "passage" and direction not in (None, "in", "out"):
             raise RuntimeError(f"Direção inválida em {connection['name']}: {direction}")
-        if not isinstance(connection.get("enabled", True), bool):
-            raise RuntimeError(f"Valor enabled inválido na conexão {connection['name']}")
 
 def find_duplicate_values(
     readers: list[dict[str, Any]],
@@ -1593,7 +1609,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.7.0 iniciado — Connector Foundation.")
+    LOGGER.info("Seiden Bridge 0.8.0 iniciado — MQTT Input Connector.")
 
     LOGGER.info(
         "Nível de log configurado: %s",
@@ -1668,12 +1684,12 @@ def main() -> None:
     )
 
     validate_active_reader_duplicates(
-        active_readers=active_readers,
+        active_readers=[item for item in active_readers if item.get("connector") == "evo"],
     )
 
     log_disabled_reader_duplicates(
-        active_readers=active_readers,
-        disabled_readers=disabled_readers,
+        active_readers=[item for item in active_readers if item.get("connector") == "evo"],
+        disabled_readers=[item for item in disabled_readers if item.get("connector") == "evo"],
     )
 
     supervisor_token = os.environ.get(
@@ -1685,8 +1701,26 @@ def main() -> None:
             "SUPERVISOR_TOKEN não encontrado"
         )
 
+    polling_readers = [item for item in active_readers if item.get("connector") == "evo"]
+    mqtt_connections = [item for item in active_readers if item.get("connector") == "mqtt"]
+
+    mqtt_clients = []
+    mqtt_event_name = str(config.get("mqtt_event", "seiden_bridge_event"))
+    for connection in mqtt_connections:
+        connector = get_connector("mqtt")
+        client = connector.start(
+            connection,
+            lambda conn, topic, payload, raw: safe_fire_ha_event(
+                supervisor_token=supervisor_token,
+                event_type=mqtt_event_name,
+                payload=create_mqtt_event(connection=conn, topic=topic, payload=payload),
+                request_timeout=request_timeout,
+            ),
+        )
+        mqtt_clients.append(client)
+
     log_reader_summary(
-        active_readers=active_readers,
+        active_readers=polling_readers,
         disabled_readers=disabled_readers,
         state=state,
         presence_event=presence_event,
@@ -1697,7 +1731,9 @@ def main() -> None:
         max_retry_interval=max_retry_interval,
     )
 
-    if not active_readers:
+    if not polling_readers:
+        if mqtt_connections:
+            LOGGER.info("[MQTT] Bridge operando somente com conexões MQTT.")
         wait_without_active_readers(
             state=state,
             supervisor_token=supervisor_token,
@@ -1708,7 +1744,7 @@ def main() -> None:
         return
 
     run_polling_loop(
-        readers=active_readers,
+        readers=polling_readers,
         state=state,
         supervisor_token=supervisor_token,
         presence_event=presence_event,

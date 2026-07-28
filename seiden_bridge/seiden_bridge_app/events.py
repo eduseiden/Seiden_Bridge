@@ -43,3 +43,36 @@ def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], ope
         "time": event_time, **operational,
     })
     return payload
+
+
+def create_mqtt_event(*, connection: dict[str, Any], topic: str, payload: Any) -> dict[str, Any]:
+    """Cria um evento canônico a partir de uma mensagem MQTT."""
+    event_type = "mqtt.message"
+    for subscription in connection.get("subscriptions") or []:
+        if subscription.get("topic") == topic and subscription.get("event_type"):
+            event_type = str(subscription["event_type"])
+            break
+    timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    return {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid4()),
+        "event_type": event_type,
+        "source": "seiden_bridge",
+        "timestamp": timestamp,
+        "connection": {
+            "id": connection["id"],
+            "name": connection["name"],
+            "type": "message_broker",
+            "connector": "mqtt",
+            "endpoint": {
+                "host": connection.get("host"),
+                "port": (connection.get("endpoint") or {}).get("port", 1883),
+            },
+        },
+        "context": connection.get("context") or {},
+        "data": payload,
+        "raw": {"topic": topic, "payload": payload},
+        "connection_id": connection["id"],
+        "connector": "mqtt",
+        "topic": topic,
+    }

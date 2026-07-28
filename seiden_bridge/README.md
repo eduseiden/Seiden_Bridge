@@ -1,4 +1,44 @@
-# Seiden Bridge 0.7.0
+# Seiden Bridge 0.8.0
+
+## MQTT Input Connector
+
+A versão 0.8.0 preserva integralmente o conector EVO da 0.7.0 e adiciona MQTT como primeira origem assíncrona de eventos. O Bridge assina tópicos configuráveis, aceita payload JSON ou texto e publica no Home Assistant um evento canônico, sem correlacionar ou interpretar o significado operacional.
+
+### Exemplo MQTT
+
+```yaml
+mqtt_event: seiden_bridge_event
+connections:
+  - id: mqtt_casa
+    name: MQTT Casa
+    connector: mqtt
+    enabled: true
+    username: seiden_bridge
+    password: "senha"
+    client_id: seiden_bridge_casa
+    endpoint:
+      host: 192.168.1.10
+      port: 1883
+      keepalive: 60
+    context:
+      interaction_type: message
+      direction: none
+    subscriptions:
+      - topic: zigbee2mqtt/FechaduraSala
+        qos: 0
+        event_type: lock.telemetry_received
+      - topic: zigbee2mqtt/SensorPortaSala
+        qos: 0
+        event_type: door.telemetry_received
+```
+
+O evento publicado é `seiden_bridge_event`. O payload preserva tópico e conteúdo original em `raw`, além dos campos canônicos `schema_version`, `event_id`, `event_type`, `timestamp`, `connection` e `data`.
+
+### Limite de responsabilidade
+
+O Bridge captura, normaliza e publica. Ele não conclui se alguém entrou ou saiu; essa interpretação pertence ao Seiden FLOW, eventualmente enriquecida pelo Seiden Vision.
+
+---
 
 ## Connector Foundation
 

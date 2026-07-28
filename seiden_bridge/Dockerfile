@@ -1,7 +1,7 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
-RUN python3 -m pip install --no-cache-dir requests
+RUN python3 -m pip install --no-cache-dir requests paho-mqtt==2.1.0
 
 COPY seiden_bridge.py /seiden_bridge.py
 COPY seiden_bridge_app /seiden_bridge_app

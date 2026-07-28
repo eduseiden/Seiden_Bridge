@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0 — MQTT Input Connector
+
+- preserva o funcionamento EVO e a compatibilidade da 0.7.0;
+- adiciona conector MQTT assíncrono com `paho-mqtt` 2.1.0;
+- permite múltiplas assinaturas por conexão, QoS 0/1/2 e payload JSON ou texto;
+- adiciona reconexão automática e TLS opcional;
+- publica mensagens normalizadas no evento configurável `seiden_bridge_event`;
+- adiciona `create_mqtt_event()` ao esquema canônico 2.0;
+- separa conexões EVO de polling e conexões MQTT de streaming;
+- mantém correlação e inferência fora do Bridge.
+
 ## 0.7.0 — Connector Foundation
 
 ### Arquitetura
