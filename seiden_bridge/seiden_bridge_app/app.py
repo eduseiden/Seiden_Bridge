@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.11.0"
+BRIDGE_VERSION = "0.12.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -105,6 +105,7 @@ def sanitize_config_for_log(
         "readers",
         "connections",
         "mqtt_connections",
+        "environment_sources",
     ):
         sanitized_items = []
         for item in config.get(key, []):
@@ -171,12 +172,132 @@ def _legacy_reader_to_connection(reader: dict[str, Any], direction: str | None) 
     })
 
 
+def _normalize_environment_sources(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Valida e normaliza o Environmental Source Registry.
+
+    Fontes desabilitadas ou inválidas são ignoradas com log, sem impedir o
+    funcionamento das demais conexões do Bridge.
+    """
+    configured = config.get("environment_sources", [])
+    if configured is None:
+        return []
+    if not isinstance(configured, list):
+        LOGGER.error("[ENV] environment_sources deve ser uma lista; registro ignorado.")
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(configured):
+        if not isinstance(item, dict):
+            LOGGER.error("[ENV] Fonte #%d inválida; esperado objeto.", index + 1)
+            continue
+        enabled = bool(item.get("enabled", True))
+        source_id = str(item.get("id") or "").strip()
+        source_name = str(item.get("name") or source_id).strip()
+        connection_id = str(item.get("connection_id") or "").strip()
+        topic = str(item.get("topic") or "").strip()
+
+        if not enabled:
+            LOGGER.info("[ENV] Fonte desabilitada ignorada: %s", source_name or source_id or index + 1)
+            continue
+
+        missing = [name for name, value in (("id", source_id), ("name", source_name), ("connection_id", connection_id), ("topic", topic)) if not value]
+        if missing:
+            LOGGER.error("[ENV] Fonte #%d ignorada; campos obrigatórios ausentes: %s", index + 1, ", ".join(missing))
+            continue
+        if source_id in seen_ids:
+            LOGGER.error("[ENV] Fonte duplicada ignorada: id=%s", source_id)
+            continue
+
+        fields = item.get("fields") or {}
+        if not isinstance(fields, dict):
+            LOGGER.error("[ENV][%s] fields deve ser um objeto; fonte ignorada.", source_name)
+            continue
+        normalized_fields = {
+            "temperature_c": str(fields.get("temperature_c", "temperature")).strip(),
+            "humidity_pct": str(fields.get("humidity_pct", "humidity")).strip(),
+            "battery_pct": str(fields.get("battery_pct", "battery")).strip(),
+        }
+        normalized_fields = {key: value for key, value in normalized_fields.items() if value}
+        if not normalized_fields:
+            LOGGER.error("[ENV][%s] nenhum campo de medição configurado; fonte ignorada.", source_name)
+            continue
+
+        seen_ids.add(source_id)
+        normalized.append({
+            **item,
+            "id": source_id,
+            "name": source_name,
+            "enabled": True,
+            "connection_id": connection_id,
+            "topic": topic,
+            "qos": int(item.get("qos", 0)),
+            "description": str(item.get("description") or "").strip() or None,
+            "location_id": str(item.get("location_id") or "").strip() or None,
+            "location_name": str(item.get("location_name") or "").strip() or None,
+            "asset_id": str(item.get("asset_id") or "").strip() or None,
+            "asset_name": str(item.get("asset_name") or "").strip() or None,
+            "profile_id": str(item.get("profile_id") or "custom").strip().lower(),
+            "fields": normalized_fields,
+        })
+    return normalized
+
+
+def _extract_payload_value(payload: Any, path: str) -> Any:
+    """Extrai um valor por caminho pontuado de payloads JSON."""
+    current = payload
+    for part in str(path).split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current
+
+
+def _coerce_measurement(value: Any) -> int | float | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def extract_environment_measurements(source: dict[str, Any], payload: Any) -> dict[str, Any]:
+    """Mapeia campos MQTT para nomes ambientais canônicos."""
+    measurements: dict[str, Any] = {}
+    for canonical_name, payload_path in source.get("fields", {}).items():
+        value = _coerce_measurement(_extract_payload_value(payload, payload_path))
+        if value is not None:
+            measurements[canonical_name] = value
+    return measurements
+
+
+def find_environment_source(connection: dict[str, Any], topic: str) -> dict[str, Any] | None:
+    """Localiza a fonte ambiental associada a uma mensagem MQTT."""
+    try:
+        import paho.mqtt.client as mqtt
+    except ImportError:
+        mqtt = None
+    for source in connection.get("environment_sources", []):
+        configured_topic = source["topic"]
+        matches = mqtt.topic_matches_sub(configured_topic, topic) if mqtt else configured_topic == topic
+        if matches:
+            return source
+    return None
+
+
 def build_connections_from_config(
     config: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Carrega o novo formato `connections` e migra formatos anteriores."""
     configured_connections = config.get("connections")
     all_connections: list[dict[str, Any]] = []
+    environment_sources = _normalize_environment_sources(config)
+    sources_by_connection: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for source in environment_sources:
+        sources_by_connection[source["connection_id"]].append(source)
 
     if configured_connections is not None:
         if not isinstance(configured_connections, list):
@@ -223,17 +344,24 @@ def build_connections_from_config(
         if not isinstance(mqtt_connection, dict):
             raise RuntimeError("Existe uma conexão MQTT inválida")
 
+        connection_id = str(mqtt_connection.get("id") or "").strip()
         topics = mqtt_connection.get("topics", [])
-        if not isinstance(topics, list) or not topics:
-            raise RuntimeError(
-                f"A conexão MQTT '{mqtt_connection.get('name', mqtt_connection.get('id', 'sem nome'))}' "
-                "deve possuir ao menos um tópico"
-            )
+        if not isinstance(topics, list):
+            LOGGER.error("[MQTT][%s] topics deve ser uma lista; conexão ignorada.", mqtt_connection.get("name", connection_id or "sem nome"))
+            continue
+        source_items = sources_by_connection.get(connection_id, [])
+        merged_topics = [str(topic).strip() for topic in topics if str(topic).strip()]
+        for source in source_items:
+            if source["topic"] not in merged_topics:
+                merged_topics.append(source["topic"])
+        if not merged_topics:
+            LOGGER.error("[MQTT][%s] conexão sem tópicos ou fontes ambientais; ignorada.", mqtt_connection.get("name", connection_id or "sem nome"))
+            continue
 
         qos = int(mqtt_connection.get("qos", 0))
         event_type = str(mqtt_connection.get("event_type", "mqtt.message_received"))
         normalized_mqtt = {
-            "id": mqtt_connection.get("id"),
+            "id": connection_id,
             "name": mqtt_connection.get("name"),
             "connector": "mqtt",
             "enabled": mqtt_connection.get("enabled", True),
@@ -252,8 +380,9 @@ def build_connections_from_config(
             },
             "subscriptions": [
                 {"topic": str(topic), "qos": qos, "event_type": event_type}
-                for topic in topics
+                for topic in merged_topics
             ],
+            "environment_sources": source_items,
             "tls": {
                 "enabled": mqtt_connection.get("tls_enabled", False),
                 "verify": mqtt_connection.get("tls_verify", True),
@@ -263,6 +392,11 @@ def build_connections_from_config(
             },
         }
         all_connections.append(normalize_connection(normalized_mqtt))
+
+    configured_mqtt_ids = {item.get("id") for item in all_connections if item.get("connector") == "mqtt"}
+    for source in environment_sources:
+        if source["connection_id"] not in configured_mqtt_ids:
+            LOGGER.error("[ENV][%s] connection_id '%s' não encontrado; fonte não será assinada.", source["name"], source["connection_id"])
 
     active = [item for item in all_connections if item.get("enabled", True)]
     disabled = [item for item in all_connections if not item.get("enabled", True)]
@@ -1783,15 +1917,37 @@ def main() -> None:
     mqtt_clients = []
     for connection in mqtt_connections:
         connector = get_connector("mqtt")
-        client = connector.start(
-            connection,
-            lambda conn, topic, payload, raw: fire_event_names(
+        def handle_mqtt_event(conn: dict[str, Any], topic: str, payload: Any, raw: bytes) -> None:
+            environment_source = find_environment_source(conn, topic)
+            measurements = None
+            if environment_source is not None:
+                measurements = extract_environment_measurements(environment_source, payload)
+                if not measurements:
+                    LOGGER.warning(
+                        "[ENV][%s] mensagem recebida sem medições reconhecidas no tópico %s",
+                        environment_source["name"],
+                        topic,
+                    )
+                else:
+                    LOGGER.debug(
+                        "[ENV][%s] medições normalizadas: %s",
+                        environment_source["name"],
+                        measurements,
+                    )
+            fire_event_names(
                 supervisor_token=supervisor_token,
                 event_names=mqtt_bridge_events,
-                payload=create_mqtt_event(connection=conn, topic=topic, payload=payload),
+                payload=create_mqtt_event(
+                    connection=conn,
+                    topic=topic,
+                    payload=payload,
+                    environment_source=environment_source,
+                    measurements=measurements,
+                ),
                 request_timeout=request_timeout,
-            ),
-        )
+            )
+
+        client = connector.start(connection, handle_mqtt_event)
         mqtt_clients.append(client)
 
     log_reader_summary(

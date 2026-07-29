@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.11.0
+version: 0.12.0
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação
   de eventos canônicos
@@ -40,6 +40,7 @@ options:
       interaction_type: passage
       direction: in
   mqtt_connections: []
+  environment_sources: []
   operation_timezone: America/Sao_Paulo
 schema:
   poll_interval: int
@@ -84,4 +85,21 @@ schema:
     ca_cert: str?
     client_cert: str?
     client_key: str?
+  environment_sources:
+  - id: str
+    name: str
+    enabled: bool?
+    connection_id: str
+    topic: str
+    qos: int(0,2)?
+    description: str?
+    location_id: str?
+    location_name: str?
+    asset_id: str?
+    asset_name: str?
+    profile_id: str?
+    fields:
+      temperature_c: str?
+      humidity_pct: str?
+      battery_pct: str?
   operation_timezone: str

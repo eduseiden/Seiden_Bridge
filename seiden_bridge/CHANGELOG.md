@@ -1,3 +1,14 @@
+## 0.12.0 — Environmental Source Registry
+
+- Adicionado cadastro de múltiplas fontes ambientais MQTT.
+- Adicionados nomes amigáveis independentes do Zigbee2MQTT.
+- Adicionados descrição, local, ativo e `profile_id` por fonte.
+- Adicionado mapeamento configurável de temperatura, umidade e bateria, inclusive por caminhos pontuados.
+- Assinaturas MQTT das fontes são incorporadas automaticamente à conexão.
+- Mantido o payload MQTT original para compatibilidade.
+- Fontes inválidas ou desabilitadas não interrompem a inicialização do Bridge.
+- Mantido o schema canônico de eventos em 2.0.
+
 ## 0.11.0 — Consolidação de versão e metadados
 
 - Alinha a versão exibida no add-on, no runtime, nos eventos e na documentação.

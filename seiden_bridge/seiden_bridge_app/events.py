@@ -1,4 +1,4 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.11.0."""
+"""Modelo canônico de eventos do Seiden Bridge 0.12.0."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -93,10 +93,22 @@ def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], ope
     return payload
 
 
-def create_mqtt_event(*, connection: dict[str, Any], topic: str, payload: Any) -> dict[str, Any]:
+def create_mqtt_event(
+    *,
+    connection: dict[str, Any],
+    topic: str,
+    payload: Any,
+    environment_source: dict[str, Any] | None = None,
+    measurements: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Cria evento MQTT e, quando aplicável, acrescenta identidade ambiental.
+
+    O payload original permanece em ``data`` e ``raw`` para compatibilidade.
+    A identidade amigável e as medições normalizadas são campos adicionais.
+    """
     event_type = str(connection.get("event_type") or "mqtt.message_received")
     timestamp = utc_now()
-    return {
+    event = {
         "schema_version": EVENT_SCHEMA_VERSION,
         "event_id": str(uuid4()),
         "event_type": event_type,
@@ -119,3 +131,32 @@ def create_mqtt_event(*, connection: dict[str, Any], topic: str, payload: Any) -
         "connector": "mqtt",
         "topic": topic,
     }
+
+    if environment_source is None:
+        return event
+
+    normalized = measurements or {}
+    source_id = environment_source["id"]
+    source_name = environment_source["name"]
+    environment = {
+        "source_id": source_id,
+        "source_name": source_name,
+        "description": environment_source.get("description"),
+        "location_id": environment_source.get("location_id"),
+        "location_name": environment_source.get("location_name"),
+        "asset_id": environment_source.get("asset_id"),
+        "asset_name": environment_source.get("asset_name"),
+        "profile_id": environment_source.get("profile_id", "custom"),
+        "measurements": normalized,
+    }
+    event["environment"] = environment
+    event["source_id"] = source_id
+    event["source_name"] = source_name
+    event["description"] = environment_source.get("description")
+    event["location_id"] = environment_source.get("location_id")
+    event["location_name"] = environment_source.get("location_name")
+    event["asset_id"] = environment_source.get("asset_id")
+    event["asset_name"] = environment_source.get("asset_name")
+    event["profile_id"] = environment_source.get("profile_id", "custom")
+    event.update(normalized)
+    return event
