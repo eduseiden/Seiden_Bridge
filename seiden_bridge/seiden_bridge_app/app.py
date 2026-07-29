@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.9.0"
+BRIDGE_VERSION = "0.10.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -889,7 +889,7 @@ def handle_authorized_record(
         "first_entry_today": state.get("first_entry_today"),
         "last_exit_today": state.get("last_exit_today"),
     }
-    payload = create_presence_event(reader=reader, record=record, operational=operational)
+    payload = create_presence_event(reader=reader, record=record, operational=operational, source_timezone=str(config.get("operation_timezone", "UTC")))
     state["last_event"] = {
         "user_id": user_id, "user_name": user_name,
         "reader_name": reader["name"], "reader_ip": reader["ip"],

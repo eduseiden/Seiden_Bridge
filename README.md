@@ -1,10 +1,10 @@
-# Seiden Bridge 0.9.0
+# Seiden Bridge 0.10.0
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 ## Arquitetura unificada
 
-A versão 0.9.0 remove definitivamente os eventos legados. EVO e MQTT publicam exclusivamente em:
+A versão 0.10.0 remove definitivamente os eventos legados. EVO e MQTT publicam exclusivamente em:
 
 - `seiden_bridge_event`
 - `seiden_connection_online`
@@ -21,4 +21,4 @@ O Bridge não correlaciona evidências nem conclui contexto operacional. Essa re
 
 ## Migração
 
-Atualize primeiro FLOW 0.6.0 e Vision 0.5.0. Depois atualize o Bridge para 0.9.0. Os campos legados são removidos da tela de configuração.
+Atualize primeiro FLOW 0.6.0 e Vision 0.5.0. Depois atualize o Bridge para 0.10.0. Os campos legados são removidos da tela de configuração.

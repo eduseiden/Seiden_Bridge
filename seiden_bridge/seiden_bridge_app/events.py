@@ -1,11 +1,48 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.9.0."""
-from datetime import datetime
+"""Modelo canônico de eventos do Seiden Bridge 0.10.0."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
+
 EVENT_SCHEMA_VERSION = "2.0"
 
-def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], operational: dict[str, Any]) -> dict[str, Any]:
-    event_time = record.get("time") or datetime.now().isoformat(timespec="seconds")
+
+def utc_now() -> str:
+    """Retorna timestamp canônico UTC no formato ISO 8601 com Z."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def normalize_timestamp(value: Any, source_timezone: str = "UTC") -> str:
+    """Converte timestamps com ou sem offset para UTC.
+
+    Valores sem offset são interpretados no fuso configurado da operação.
+    """
+    if value in (None, ""):
+        return utc_now()
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                parsed = None
+        if parsed is None:
+            return utc_now()
+    if parsed.tzinfo is None:
+        try:
+            parsed = parsed.replace(tzinfo=ZoneInfo(source_timezone))
+        except Exception:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], operational: dict[str, Any], source_timezone: str = "UTC") -> dict[str, Any]:
+    event_time = normalize_timestamp(record.get("time"), source_timezone)
     user_id = str(record.get("enrollid"))
     user_name = record.get("name") or user_id
     connection_id = reader.get("connection_id") or operational["reader_id"]
@@ -18,8 +55,10 @@ def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], ope
         "source": "seiden_bridge",
         "timestamp": event_time,
         "connection": {
-            "id": connection_id, "name": reader["name"],
-            "type": "device", "connector": reader.get("connector", "evo"),
+            "id": connection_id,
+            "name": reader["name"],
+            "type": "device",
+            "connector": reader.get("connector", "evo"),
             "endpoint": {"host": reader.get("host") or reader.get("ip")},
         },
         "context": {"interaction_type": interaction_type, "direction": direction},
@@ -27,32 +66,36 @@ def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], ope
         "result": "authorized",
         "operation": operational,
         "raw": record,
-        # Objetos 0.6.x preservados durante a transição.
         "reader": {
-            "id": connection_id, "name": reader["name"], "ip": reader.get("ip"),
-            "driver": reader.get("connector", "evo"), "direction": direction,
+            "id": connection_id,
+            "name": reader["name"],
+            "ip": reader.get("ip"),
+            "driver": reader.get("connector", "evo"),
+            "direction": direction,
         },
         "person": {"id": user_id, "name": user_name, "authorized": True},
     }
     payload.update({
-        "connection_id": connection_id, "connector": reader.get("connector", "evo"),
-        "interaction_type": interaction_type, "reader_id": connection_id,
-        "driver": reader.get("connector", "evo"), "reader_name": reader["name"],
-        "reader_ip": reader.get("ip"), "direction": direction,
-        "user_id": user_id, "user_name": user_name, "authorized": True,
-        "time": event_time, **operational,
+        "connection_id": connection_id,
+        "connector": reader.get("connector", "evo"),
+        "interaction_type": interaction_type,
+        "reader_id": connection_id,
+        "driver": reader.get("connector", "evo"),
+        "reader_name": reader["name"],
+        "reader_ip": reader.get("ip"),
+        "direction": direction,
+        "user_id": user_id,
+        "user_name": user_name,
+        "authorized": True,
+        "time": event_time,
+        **operational,
     })
     return payload
 
 
 def create_mqtt_event(*, connection: dict[str, Any], topic: str, payload: Any) -> dict[str, Any]:
-    """Cria um evento canônico a partir de uma mensagem MQTT."""
-    event_type = "mqtt.message"
-    for subscription in connection.get("subscriptions") or []:
-        if subscription.get("topic") == topic and subscription.get("event_type"):
-            event_type = str(subscription["event_type"])
-            break
-    timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    event_type = str(connection.get("event_type") or "mqtt.message_received")
+    timestamp = utc_now()
     return {
         "schema_version": EVENT_SCHEMA_VERSION,
         "event_id": str(uuid4()),
@@ -66,10 +109,10 @@ def create_mqtt_event(*, connection: dict[str, Any], topic: str, payload: Any) -
             "connector": "mqtt",
             "endpoint": {
                 "host": connection.get("host"),
-                "port": (connection.get("endpoint") or {}).get("port", 1883),
+                "port": connection.get("port", 1883),
             },
         },
-        "context": connection.get("context") or {},
+        "context": connection.get("context") or {"interaction_type": "message", "direction": None},
         "data": payload,
         "raw": {"topic": topic, "payload": payload},
         "connection_id": connection["id"],

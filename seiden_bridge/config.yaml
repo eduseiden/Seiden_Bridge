@@ -1,7 +1,8 @@
 name: Seiden Bridge
-version: 0.9.0
+version: 0.10.0
 slug: seiden_bridge
-description: Camada de integração do Seiden One — eventos unificados para EVO e MQTT
+description: Camada de integração do Seiden One — captura, normalização e publicação
+  de eventos canônicos
 url: https://github.com/eduseiden/Seiden-HA
 startup: services
 boot: auto
@@ -39,6 +40,7 @@ options:
       interaction_type: passage
       direction: in
   mqtt_connections: []
+  operation_timezone: America/Sao_Paulo
 schema:
   poll_interval: int
   request_timeout: int
@@ -82,3 +84,4 @@ schema:
     ca_cert: str?
     client_cert: str?
     client_key: str?
+  operation_timezone: str

@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.9.0 — Arquitetura unificada sem legado
+## 0.10.0
+- Adoção do Seiden One Platform Standard v1.0.
+- Timestamps canônicos publicados em UTC com sufixo Z.
+- Eventos EVO sem offset são interpretados no fuso `operation_timezone`.
+- Eventos MQTT e EVO permanecem no schema canônico 2.0.
+
+## 0.10.0 — Arquitetura unificada sem legado
 
 - Remove `seiden_presence`, `seiden_reader_online` e `seiden_reader_offline`.
 - Remove `legacy_events_enabled`, `ha_event`, `mqtt_event`, `reader_online_event` e `reader_offline_event`.
