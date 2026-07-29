@@ -1,3 +1,9 @@
+## 0.10.0.1
+
+- Corrige `NameError: config is not defined` ao processar um novo evento EVO.
+- O fuso `operation_timezone` passa explicitamente do processo principal ao loop e ao normalizador do evento.
+- Corrige a identificação da versão no log de inicialização.
+
 # Changelog
 
 ## 0.10.0

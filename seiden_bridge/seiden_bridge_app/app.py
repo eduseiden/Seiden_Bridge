@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.10.0"
+BRIDGE_VERSION = "0.10.0.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -828,6 +828,7 @@ def handle_authorized_record(
     reader: dict[str, Any],
     record: dict[str, Any],
     state: dict[str, Any],
+    operation_timezone: str,
 ) -> dict[str, Any]:
     """Processa autenticação conforme o contexto da conexão.
 
@@ -889,7 +890,7 @@ def handle_authorized_record(
         "first_entry_today": state.get("first_entry_today"),
         "last_exit_today": state.get("last_exit_today"),
     }
-    payload = create_presence_event(reader=reader, record=record, operational=operational, source_timezone=str(config.get("operation_timezone", "UTC")))
+    payload = create_presence_event(reader=reader, record=record, operational=operational, source_timezone=operation_timezone)
     state["last_event"] = {
         "user_id": user_id, "user_name": user_name,
         "reader_name": reader["name"], "reader_ip": reader["ip"],
@@ -1476,6 +1477,7 @@ def run_polling_loop(
     max_retry_interval: int,
     publish_last_photo: bool,
     photo_max_size_mb: int,
+    operation_timezone: str,
 ) -> None:
     """Executa o loop principal de monitoramento."""
     last_seen: dict[str, str] = {}
@@ -1579,6 +1581,7 @@ def run_polling_loop(
                     reader=reader,
                     record=latest,
                     state=state,
+                    operation_timezone=operation_timezone,
                 )
 
                 runtime["last_event"] = {
@@ -1684,7 +1687,7 @@ def main() -> None:
 
     setup_logging(log_level)
 
-    LOGGER.info("Seiden Bridge 0.9.0 iniciado — arquitetura unificada.")
+    LOGGER.info("Seiden Bridge %s iniciado — arquitetura unificada.", BRIDGE_VERSION)
 
     LOGGER.info(
         "Nível de log configurado: %s",
@@ -1827,6 +1830,7 @@ def main() -> None:
         max_retry_interval=max_retry_interval,
         publish_last_photo=publish_last_photo,
         photo_max_size_mb=photo_max_size_mb,
+        operation_timezone=str(config.get("operation_timezone", "UTC")),
     )
 
 
