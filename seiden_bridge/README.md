@@ -1,4 +1,4 @@
-# Seiden Bridge 0.10.0.1
+# Seiden Bridge 0.11.0
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 

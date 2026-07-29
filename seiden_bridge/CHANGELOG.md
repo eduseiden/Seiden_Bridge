@@ -1,3 +1,10 @@
+## 0.11.0 — Consolidação de versão e metadados
+
+- Alinha a versão exibida no add-on, no runtime, nos eventos e na documentação.
+- Consolida o repositório `Seiden_Bridge` como baseline oficial para as próximas evoluções.
+- Remove artefatos locais de cache Python do pacote de distribuição.
+- Nenhuma alteração funcional nos conectores EVO ou MQTT e nenhum impacto no schema canônico 2.0.
+
 ## 0.10.0.1
 
 - Corrige `NameError: config is not defined` ao processar um novo evento EVO.

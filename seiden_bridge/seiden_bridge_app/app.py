@@ -24,7 +24,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.10.0.1"
+BRIDGE_VERSION = "0.11.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
