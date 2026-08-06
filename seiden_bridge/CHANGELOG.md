@@ -1,3 +1,16 @@
+## 0.13.0 — EVO Relay WebSocket
+
+- Adicionado modo EVO Relay WebSocket, mantendo o conector EVO HTTP direto existente.
+- Um servidor e porta podem atender vários faciais, identificados pelo `serial_number`.
+- Cada serial possui nome, `customer_id`, `site_id` e direção operacional `in`, `out` ou `none`.
+- O Bridge aceita a conexão do facial, encaminha frames integralmente ao servidor EVO original e observa `reg` e `sendlog`.
+- Eventos autorizados (`event: 0`) são normalizados no schema canônico 2.0.
+- Imagens Base64 recebidas em `record[].image` são salvas localmente por serial e expostas por `photo_url`.
+- O Base64 bruto não é publicado no barramento do Home Assistant.
+- Seriais não cadastrados permanecem transparentemente encaminhados, mas não geram eventos Seiden.
+- Eventos de disponibilidade são publicados quando cada serial registra/desconecta.
+- Mantidos EVO Direct, MQTT e Environmental Source Registry.
+
 ## 0.12.0 — Environmental Source Registry
 
 - Adicionado cadastro de múltiplas fontes ambientais MQTT.

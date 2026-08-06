@@ -1,5 +1,7 @@
 import json
 import logging
+import base64
+import threading
 import os
 import sys
 import time
@@ -12,6 +14,7 @@ import re
 import requests
 
 from .connectors import execute_connection_command, get_connector
+from .connectors.evo_relay import EvoRelayConnector
 from .events import create_presence_event, create_mqtt_event
 
 
@@ -24,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.12.0"
+BRIDGE_VERSION = "0.13.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -36,6 +39,8 @@ DEFAULT_CONNECTION_OFFLINE_EVENT = "seiden_connection_offline"
 DEFAULT_CONNECTION_ONLINE_EVENT = "seiden_connection_online"
 
 IDLE_SLEEP_SECONDS = 60
+
+STATE_LOCK = threading.RLock()
 
 LOGGER = logging.getLogger("seiden_bridge")
 
@@ -405,6 +410,175 @@ def build_connections_from_config(
 
 # Alias interno temporário para reduzir risco na migração 0.7.0.
 build_readers_from_config = build_connections_from_config
+
+def build_evo_relay_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normaliza os servidores EVO Relay e o mapa serial -> equipamento."""
+    configured = config.get("evo_relay_connections", []) or []
+    if not isinstance(configured, list):
+        raise RuntimeError("evo_relay_connections deve ser uma lista")
+
+    relays: list[dict[str, Any]] = []
+    seen_ports: set[int] = set()
+    seen_serials: set[str] = set()
+    for index, item in enumerate(configured):
+        if not isinstance(item, dict) or not item.get("enabled", True):
+            continue
+        relay_id = str(item.get("id") or f"evo_relay_{index + 1}").strip()
+        name = str(item.get("name") or relay_id).strip()
+        host = str(item.get("host") or "").strip()
+        port = int(item.get("port", 7788))
+        listen_port = int(item.get("listen_port", 7788))
+        scheme = str(item.get("scheme") or "ws").strip().lower()
+        path = str(item.get("path") or "/").strip() or "/"
+        if not host:
+            raise RuntimeError(f"Servidor ausente no EVO Relay {name}")
+        if scheme not in {"ws", "wss"}:
+            raise RuntimeError(f"Protocolo inválido no EVO Relay {name}: {scheme}")
+        if listen_port in seen_ports:
+            raise RuntimeError(f"Porta local duplicada entre EVO Relays: {listen_port}")
+        seen_ports.add(listen_port)
+
+        devices_raw = item.get("devices") or []
+        if not isinstance(devices_raw, list) or not devices_raw:
+            raise RuntimeError(f"O EVO Relay {name} exige ao menos um equipamento")
+        devices = []
+        for device_index, device in enumerate(devices_raw):
+            if not isinstance(device, dict) or not device.get("enabled", True):
+                continue
+            serial = str(device.get("serial_number") or "").strip()
+            if not serial:
+                raise RuntimeError(f"serial_number ausente em {name}, equipamento #{device_index + 1}")
+            if serial in seen_serials:
+                raise RuntimeError(f"Serial EVO Relay duplicado: {serial}")
+            seen_serials.add(serial)
+            direction_raw = str(device.get("direction") or "none").strip().lower()
+            if direction_raw not in {"in", "out", "none"}:
+                raise RuntimeError(f"Direção inválida para {serial}: {direction_raw}")
+            direction = None if direction_raw == "none" else direction_raw
+            device_id = str(device.get("id") or f"{relay_id}_{slugify_entity(serial)}")
+            devices.append({
+                **device,
+                "id": device_id,
+                "connection_id": device_id,
+                "serial_number": serial,
+                "name": str(device.get("name") or serial).strip(),
+                "enabled": True,
+                "direction": direction,
+                "interaction_type": "passage" if direction else "authentication",
+                "customer_id": str(device.get("customer_id") or "").strip() or None,
+                "site_id": str(device.get("site_id") or "").strip() or None,
+                "connector": "evo_relay",
+                "driver": "evo_relay",
+                "host": host,
+                "ip": host,
+                "endpoint": {"host": host, "port": port, "scheme": scheme, "path": path},
+            })
+        relays.append({
+            **item,
+            "id": relay_id,
+            "name": name,
+            "enabled": True,
+            "listen_host": str(item.get("listen_host") or "0.0.0.0"),
+            "listen_port": listen_port,
+            "endpoint": {"host": host, "port": port, "scheme": scheme, "path": path},
+            "devices": devices,
+        })
+    return relays
+
+
+def relay_device_map(relay: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(device["serial_number"]): device for device in relay.get("devices", [])}
+
+
+def save_evo_relay_image(serial: str, record: dict[str, Any], maximum_size_mb: int) -> tuple[str | None, str | None]:
+    """Salva JPEG Base64 de sendlog e devolve URL local e nome do arquivo."""
+    value = record.get("image")
+    if not isinstance(value, str) or not value.strip():
+        return None, None
+    raw = value.strip()
+    if raw.lower().startswith("data:image/") and "," in raw:
+        raw = raw.split(",", 1)[1]
+    try:
+        image = base64.b64decode(raw, validate=False)
+    except Exception:
+        LOGGER.warning("[EVO RELAY][%s] Imagem Base64 inválida", serial)
+        return None, None
+    if not image.startswith(b"\xff\xd8\xff"):
+        LOGGER.warning("[EVO RELAY][%s] Imagem recebida não é JPEG", serial)
+        return None, None
+    if len(image) > max(1, int(maximum_size_mb)) * 1024 * 1024:
+        LOGGER.warning("[EVO RELAY][%s] Imagem excede limite configurado", serial)
+        return None, None
+
+    serial_slug = slugify_entity(serial)
+    directory = LAST_PHOTO_DIR / "evo_relay" / serial_slug
+    directory.mkdir(parents=True, exist_ok=True)
+    when = re.sub(r"[^0-9]", "", str(record.get("time") or ""))[:14] or str(int(time.time()))
+    person = slugify_entity(str(record.get("enrollid") or "unknown"))
+    filename = f"{when}_{person}_{int(time.time() * 1000)}.jpg"
+    (directory / filename).write_bytes(image)
+    try:
+        captures = sorted(directory.glob("*.jpg"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for old in captures[100:]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        LOGGER.debug("[EVO RELAY][%s] Não foi possível aplicar retenção de imagens", serial)
+    return f"/local/seiden_bridge/evo_relay/{serial_slug}/{filename}", filename
+
+
+def handle_evo_relay_record(
+    relay: dict[str, Any], serial: str, record: dict[str, Any], state: dict[str, Any],
+    supervisor_token: str, bridge_events: list[str], request_timeout: int,
+    photo_max_size_mb: int, operation_timezone: str,
+) -> None:
+    device = relay_device_map(relay).get(serial)
+    if device is None:
+        LOGGER.warning("[EVO RELAY][%s] Serial não cadastrado %s; frame apenas encaminhado", relay["name"], serial)
+        return
+    if record.get("event") != 0:
+        LOGGER.info("[EVO RELAY][%s][%s] Evento ignorado código=%s", relay["name"], serial, record.get("event"))
+        return
+
+    safe_record = dict(record)
+    photo_url, photo_filename = save_evo_relay_image(serial, record, photo_max_size_mb)
+    safe_record.pop("image", None)
+    safe_record["image_captured"] = bool(photo_url)
+    if photo_url:
+        safe_record["_seiden_photo_url"] = photo_url
+        safe_record["_seiden_photo_filename"] = photo_filename
+
+    with STATE_LOCK:
+        payload = handle_authorized_record(device, safe_record, state, operation_timezone)
+    payload.update({
+        "device_serial": serial,
+        "device_name": device["name"],
+        "customer_id": device.get("customer_id"),
+        "site_id": device.get("site_id"),
+        "relay_id": relay["id"],
+    })
+    payload["connection"].update({
+        "type": "websocket_device",
+        "serial_number": serial,
+        "relay_id": relay["id"],
+        "endpoint": relay["endpoint"],
+    })
+    payload["context"].update({
+        "customer_id": device.get("customer_id"),
+        "site_id": device.get("site_id"),
+    })
+    fire_event_names(
+        supervisor_token=supervisor_token,
+        event_names=bridge_events,
+        payload=payload,
+        request_timeout=request_timeout,
+    )
+    LOGGER.info(
+        "[EVO RELAY][%s][%s] %s | direção=%s | foto=%s",
+        relay["name"], serial, payload.get("user_name"), device.get("direction") or "none",
+        "sim" if photo_url else "não",
+    )
+
+
 
 def default_state() -> dict[str, Any]:
     """Cria o estado inicial do Occupancy Engine."""
@@ -928,6 +1102,8 @@ def build_photo_url(
     record: dict[str, Any],
 ) -> str | None:
     """Monta a URL completa da foto."""
+    if record.get("_seiden_photo_url"):
+        return str(record["_seiden_photo_url"])
     photo_path = record.get("photourl")
 
     if not photo_path:
@@ -938,6 +1114,8 @@ def build_photo_url(
 
 def build_photo_filename(record: dict[str, Any]) -> str | None:
     """Extrai o nome do arquivo de foto informado pelo leitor."""
+    if record.get("_seiden_photo_filename"):
+        return str(record["_seiden_photo_filename"])
     photo_path = record.get("photourl")
 
     if not photo_path:
@@ -1838,6 +2016,7 @@ def main() -> None:
         active_readers,
         disabled_readers,
     ) = build_connections_from_config(config)
+    evo_relays = build_evo_relay_connections(config)
 
     state = load_state()
 
@@ -1950,6 +2129,46 @@ def main() -> None:
         client = connector.start(connection, handle_mqtt_event)
         mqtt_clients.append(client)
 
+    relay_connector = EvoRelayConnector()
+    relay_threads = []
+    for relay in evo_relays:
+        def relay_registration(relay_conn, serial, payload):
+            device = relay_device_map(relay_conn).get(serial)
+            devinfo = payload.get("devinfo") if isinstance(payload.get("devinfo"), dict) else {}
+            if device:
+                LOGGER.info(
+                    "[EVO RELAY][%s] %s online | serial=%s | direção=%s | modelo=%s | firmware=%s",
+                    relay_conn["name"], device["name"], serial, device.get("direction") or "none",
+                    devinfo.get("modelname"), devinfo.get("firmware"),
+                )
+            else:
+                LOGGER.warning("[EVO RELAY][%s] Serial não cadastrado conectado: %s", relay_conn["name"], serial)
+
+        def relay_record(relay_conn, serial, record):
+            handle_evo_relay_record(
+                relay_conn, serial, record, state, supervisor_token, evo_bridge_events,
+                request_timeout, photo_max_size_mb, str(config.get("operation_timezone", "UTC")),
+            )
+
+        def relay_status(relay_conn, serial, status):
+            device = relay_device_map(relay_conn).get(serial)
+            if not device:
+                return
+            fire_event_names(
+                supervisor_token=supervisor_token,
+                event_names=online_events if status == "online" else offline_events,
+                payload={
+                    "source": "seiden_bridge", "connector": "evo_relay",
+                    "relay_id": relay_conn["id"], "device_serial": serial,
+                    "device_name": device["name"], "customer_id": device.get("customer_id"),
+                    "site_id": device.get("site_id"), "direction": device.get("direction"),
+                    "status": status, "timestamp": now_iso(),
+                },
+                request_timeout=request_timeout,
+            )
+
+        relay_threads.append(relay_connector.start(relay, relay_registration, relay_record, relay_status))
+
     log_reader_summary(
         active_readers=polling_readers,
         disabled_readers=disabled_readers,
@@ -1963,8 +2182,8 @@ def main() -> None:
     )
 
     if not polling_readers:
-        if mqtt_connections:
-            LOGGER.info("[MQTT] Bridge operando somente com conexões MQTT.")
+        if mqtt_connections or evo_relays:
+            LOGGER.info("Bridge operando somente com streaming: MQTT=%d EVO Relay=%d", len(mqtt_connections), len(evo_relays))
         wait_without_active_readers(
             state=state,
             supervisor_token=supervisor_token,

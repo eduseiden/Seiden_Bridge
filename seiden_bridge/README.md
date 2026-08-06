@@ -1,6 +1,38 @@
-# Seiden Bridge 0.12.0
+# Seiden Bridge 0.13.0
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
+
+## EVO Relay WebSocket
+
+A versão 0.13.0 adiciona um segundo modo de integração EVO: o Bridge pode receber conexões WebSocket dos faciais, encaminhá-las de forma transparente ao servidor EVO existente e, ao mesmo tempo, extrair os eventos `sendlog` e suas imagens Base64.
+
+O servidor/porta são configurados uma única vez e vários equipamentos são associados pelo `serial_number`. Cada equipamento pode ter cliente, site, nome e direção operacional `in`, `out` ou `none`.
+
+```yaml
+evo_relay_connections:
+  - id: evo_cloud
+    name: Servidor EVO
+    enabled: true
+    listen_host: 0.0.0.0
+    listen_port: 7788
+    host: 64.23.152.47
+    port: 7788
+    scheme: ws
+    path: /
+    devices:
+      - serial_number: AYTI25116940
+        name: Lab - Entrada
+        customer_id: lab
+        site_id: lab
+        direction: in
+      - serial_number: AYTJ15126851
+        name: Cliente - Facial
+        customer_id: cliente_x
+        site_id: matriz
+        direction: none
+```
+
+O `sn` recebido em `reg`/`sendlog` identifica o equipamento. Somente seriais cadastrados geram eventos Seiden; seriais desconhecidos continuam sendo encaminhados ao servidor sem publicação. Fotos de autenticações válidas são salvas por serial em `/config/www/seiden_bridge/evo_relay/` e publicadas como `photo_url`, sem transportar o Base64 bruto no barramento do Home Assistant.
 
 ## Environmental Source Registry
 
@@ -43,7 +75,7 @@ Fontes desabilitadas ou incompletas são ignoradas com log e não derrubam o Bri
 
 ## Eventos
 
-EVO e MQTT publicam exclusivamente em `seiden_bridge_event`. A origem é identificada no envelope pelos campos `connector`, `connection` e `event_type`.
+EVO Direct, EVO Relay e MQTT publicam exclusivamente em `seiden_bridge_event`. A origem é identificada no envelope pelos campos `connector`, `connection` e `event_type`.
 
 ## Responsabilidades
 
