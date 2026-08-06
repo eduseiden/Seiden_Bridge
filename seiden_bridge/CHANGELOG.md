@@ -1,3 +1,13 @@
+## 0.13.1 — Consolidação EVO Relay
+
+- Corrige `reader_ip` para usar o IP real informado pelo terminal em `devinfo.curip`.
+- Separa `relay_server` e `relay_port` do endereço físico do leitor nos eventos canônicos.
+- Corrige contadores de inicialização para incluir dispositivos EVO Relay e conexões MQTT.
+- Remove o warning incorreto de ausência de leitores quando o Bridge opera por streaming.
+- Adiciona `reset_occupancy_state_on_start`, desabilitado por padrão, para limpeza explícita do estado persistido em testes/migrações.
+- Mantém `photo_url` por serial no `seiden_bridge_event`, pronto para consumo pelo Seiden Vision.
+- Mantém schema canônico 2.0 e compatibilidade com EVO Direct, MQTT e Environmental Source Registry.
+
 ## 0.13.0 — EVO Relay WebSocket
 
 - Adicionado modo EVO Relay WebSocket, mantendo o conector EVO HTTP direto existente.

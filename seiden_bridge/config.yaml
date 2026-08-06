@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.13.0
+version: 0.13.1
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação
   de eventos canônicos
@@ -23,6 +23,7 @@ options:
   log_level: INFO
   publish_last_photo: true
   photo_max_size_mb: 5
+  reset_occupancy_state_on_start: false
   bridge_event: seiden_bridge_event
   connection_offline_event: seiden_connection_offline
   connection_online_event: seiden_connection_online
@@ -50,6 +51,7 @@ schema:
   log_level: list(DEBUG|INFO|WARNING|ERROR)
   publish_last_photo: bool
   photo_max_size_mb: int
+  reset_occupancy_state_on_start: bool
   bridge_event: str
   connection_offline_event: str
   connection_online_event: str

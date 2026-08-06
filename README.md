@@ -1,10 +1,19 @@
-# Seiden Bridge 0.13.0
+# Seiden Bridge 0.13.1
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
+
+### Ajustes 0.13.1
+
+- `reader_ip` do EVO Relay passa a vir de `devinfo.curip` recebido no `reg`; o servidor upstream fica separado em `relay_server` e `relay_port`.
+- O resumo de inicialização conta leitores EVO Relay e conexões MQTT corretamente.
+- O Bridge não exibe mais o aviso de ausência de leitores quando está operando somente por streaming.
+- Nova opção `reset_occupancy_state_on_start` (padrão `false`) permite limpar, de forma explícita, estado persistido de ocupação em ambientes de teste/migração.
+- A foto do EVO Relay continua publicada em `photo_url` no mesmo `seiden_bridge_event`, mantendo o contrato de entrada do Vision.
+
 ## EVO Relay WebSocket
 
-A versão 0.13.0 adiciona um segundo modo de integração EVO: o Bridge pode receber conexões WebSocket dos faciais, encaminhá-las de forma transparente ao servidor EVO existente e, ao mesmo tempo, extrair os eventos `sendlog` e suas imagens Base64.
+A versão 0.13.1 consolida o modo EVO Relay introduzido na 0.13.0: o Bridge pode receber conexões WebSocket dos faciais, encaminhá-las de forma transparente ao servidor EVO existente e, ao mesmo tempo, extrair os eventos `sendlog` e suas imagens Base64.
 
 O servidor/porta são configurados uma única vez e vários equipamentos são associados pelo `serial_number`. Cada equipamento pode ter cliente, site, nome e direção operacional `in`, `out` ou `none`.
 

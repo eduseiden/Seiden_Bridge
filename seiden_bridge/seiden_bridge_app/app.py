@@ -27,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.13.0"
+BRIDGE_VERSION = "0.13.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -469,8 +469,12 @@ def build_evo_relay_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "site_id": str(device.get("site_id") or "").strip() or None,
                 "connector": "evo_relay",
                 "driver": "evo_relay",
+                # Antes do primeiro `reg`, o IP real do terminal ainda é desconhecido.
+                # `host` representa o servidor upstream; `ip` será enriquecido pelo devinfo.curip.
                 "host": host,
-                "ip": host,
+                "ip": None,
+                "relay_server": host,
+                "relay_port": port,
                 "endpoint": {"host": host, "port": port, "scheme": scheme, "path": path},
             })
         relays.append({
@@ -555,6 +559,15 @@ def handle_evo_relay_record(
         "customer_id": device.get("customer_id"),
         "site_id": device.get("site_id"),
         "relay_id": relay["id"],
+        "reader_ip": device.get("ip"),
+        "relay_server": relay["endpoint"].get("host"),
+        "relay_port": relay["endpoint"].get("port"),
+    })
+    payload["reader"]["ip"] = device.get("ip")
+    payload["reader"].update({
+        "serial_number": serial,
+        "relay_server": relay["endpoint"].get("host"),
+        "relay_port": relay["endpoint"].get("port"),
     })
     payload["connection"].update({
         "type": "websocket_device",
@@ -1655,6 +1668,8 @@ def log_disabled_reader_duplicates(
 def log_reader_summary(
     active_readers: list[dict[str, Any]],
     disabled_readers: list[dict[str, Any]],
+    relay_devices: list[dict[str, Any]],
+    mqtt_count: int,
     state: dict[str, Any],
     presence_event: str,
     reader_offline_event: str,
@@ -1664,37 +1679,21 @@ def log_reader_summary(
     max_retry_interval: int,
 ) -> None:
     """Registra o resumo operacional da inicialização."""
+    all_reader_devices = list(active_readers) + list(relay_devices)
     active_entry_count = sum(
-        1
-        for reader in active_readers
-        if reader.get("direction") == "in"
+        1 for reader in all_reader_devices if reader.get("direction") == "in"
     )
-
     active_exit_count = sum(
-        1
-        for reader in active_readers
-        if reader.get("direction") == "out"
+        1 for reader in all_reader_devices if reader.get("direction") == "out"
     )
 
-    LOGGER.info(
-        "Leitores ativos: %d",
-        len(active_readers),
-    )
-
-    LOGGER.info(
-        "Leitores desativados: %d",
-        len(disabled_readers),
-    )
-
-    LOGGER.info(
-        "Leitores ativos de entrada: %d",
-        active_entry_count,
-    )
-
-    LOGGER.info(
-        "Leitores ativos de saída: %d",
-        active_exit_count,
-    )
+    LOGGER.info("Leitores ativos: %d", len(all_reader_devices))
+    LOGGER.info("Leitores HTTP ativos: %d", len(active_readers))
+    LOGGER.info("Leitores EVO Relay ativos: %d", len(relay_devices))
+    LOGGER.info("Conexões MQTT ativas: %d", mqtt_count)
+    LOGGER.info("Leitores desativados: %d", len(disabled_readers))
+    LOGGER.info("Leitores ativos de entrada: %d", active_entry_count)
+    LOGGER.info("Leitores ativos de saída: %d", active_exit_count)
 
     LOGGER.info(
         "Evento de presença: %s",
@@ -1755,12 +1754,13 @@ def wait_without_active_readers(
     request_timeout: int,
     publish_last_photo: bool,
     photo_max_size_mb: int,
+    streaming_active: bool = False,
 ) -> None:
-    """Mantém o Bridge ativo quando todos estão desativados."""
-    LOGGER.warning(
-        "Nenhum leitor está ativo. "
-        "O Bridge permanecerá em espera."
-    )
+    """Mantém o processo ativo quando não há leitores HTTP para polling."""
+    if streaming_active:
+        LOGGER.info("Sem leitores HTTP para polling; streaming permanece ativo.")
+    else:
+        LOGGER.warning("Nenhum leitor está ativo. O Bridge permanecerá em espera.")
     started_monotonic = time.monotonic()
 
     while True:
@@ -2019,6 +2019,10 @@ def main() -> None:
     evo_relays = build_evo_relay_connections(config)
 
     state = load_state()
+    if bool(config.get("reset_occupancy_state_on_start", False)):
+        state = default_state()
+        save_state(state)
+        LOGGER.warning("[STATE] Estado de ocupação reiniciado por configuração.")
 
     poll_interval = int(
         config.get(
@@ -2136,10 +2140,16 @@ def main() -> None:
             device = relay_device_map(relay_conn).get(serial)
             devinfo = payload.get("devinfo") if isinstance(payload.get("devinfo"), dict) else {}
             if device:
+                # O `reg` contém a identidade real do terminal. O servidor upstream não deve
+                # ser publicado como reader_ip.
+                device["ip"] = str(devinfo.get("curip") or "").strip() or device.get("ip")
+                device["model"] = devinfo.get("modelname")
+                device["firmware"] = devinfo.get("firmware")
+                device["mac"] = devinfo.get("mac")
                 LOGGER.info(
-                    "[EVO RELAY][%s] %s online | serial=%s | direção=%s | modelo=%s | firmware=%s",
-                    relay_conn["name"], device["name"], serial, device.get("direction") or "none",
-                    devinfo.get("modelname"), devinfo.get("firmware"),
+                    "[EVO RELAY][%s] %s online | serial=%s | ip=%s | direção=%s | modelo=%s | firmware=%s",
+                    relay_conn["name"], device["name"], serial, device.get("ip") or "desconhecido",
+                    device.get("direction") or "none", devinfo.get("modelname"), devinfo.get("firmware"),
                 )
             else:
                 LOGGER.warning("[EVO RELAY][%s] Serial não cadastrado conectado: %s", relay_conn["name"], serial)
@@ -2169,9 +2179,12 @@ def main() -> None:
 
         relay_threads.append(relay_connector.start(relay, relay_registration, relay_record, relay_status))
 
+    relay_devices = [device for relay in evo_relays for device in relay.get("devices", [])]
     log_reader_summary(
         active_readers=polling_readers,
         disabled_readers=disabled_readers,
+        relay_devices=relay_devices,
+        mqtt_count=len(mqtt_connections),
         state=state,
         presence_event=bridge_event,
         reader_offline_event=connection_offline_event,
@@ -2190,6 +2203,7 @@ def main() -> None:
             request_timeout=request_timeout,
             publish_last_photo=publish_last_photo,
             photo_max_size_mb=photo_max_size_mb,
+            streaming_active=bool(mqtt_connections or evo_relays),
         )
         return
 
