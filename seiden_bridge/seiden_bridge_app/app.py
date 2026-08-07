@@ -27,7 +27,9 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.14.2"
+from seiden_bridge_app.state_driver_ui import start_state_driver_ui
+
+BRIDGE_VERSION = "0.14.3"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -2120,6 +2122,8 @@ def main() -> None:
     setup_logging(log_level)
 
     LOGGER.info("Seiden Bridge %s iniciado — arquitetura unificada.", BRIDGE_VERSION)
+
+    start_state_driver_ui()
 
     LOGGER.info(
         "Nível de log configurado: %s",

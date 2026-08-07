@@ -1,9 +1,9 @@
-# Seiden Bridge 0.14.2
+# Seiden Bridge 0.14.3
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.2
+## MQTT State Driver — 0.14.3
 
 O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
 
@@ -166,3 +166,20 @@ EVO Direct, EVO Relay e MQTT publicam exclusivamente em `seiden_bridge_event`. A
 ## Responsabilidades
 
 O Bridge identifica, conecta e normaliza a fonte. A interpretação de faixas e perfis pertence ao Seiden Vision; histórico, filtros e inteligência operacional pertencem ao Seiden FLOW.
+
+
+## Configuração visual do MQTT State Driver
+
+A partir da 0.14.3, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
+os tópicos do MQTT State Driver sem redigitar a lista `topics`.
+
+1. Cadastre normalmente os tópicos em `mqtt_connections[].topics`.
+2. Abra **Seiden Bridge → Abrir interface web**.
+3. Em cada conexão MQTT, marque o subconjunto de tópicos que deve gerar `state_transition`.
+4. Clique em **Salvar e reiniciar Bridge**.
+
+A interface só permite selecionar tópicos que já existem em `topics`, garantindo que
+`state_driver_topics` seja sempre um subconjunto da assinatura MQTT.
+
+O campo YAML `state_driver_topics` continua suportado por compatibilidade com a 0.14.2,
+mas a Web UI passa a ser a forma recomendada de manutenção.

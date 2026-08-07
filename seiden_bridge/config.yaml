@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.14.2
+version: 0.14.3
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação de eventos canônicos
 url: https://github.com/eduseiden/Seiden_Bridge
@@ -127,3 +127,8 @@ schema:
       customer_id: str?
       site_id: str?
       direction: list(in|out|none)
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:lan-connect
+panel_title: Seiden Bridge
+panel_admin: true

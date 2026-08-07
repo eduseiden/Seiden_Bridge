@@ -1,3 +1,14 @@
+## 0.14.3 — MQTT State Driver Configurator
+
+- Adiciona Web UI via Home Assistant Ingress para configurar o MQTT State Driver.
+- A UI lê diretamente `mqtt_connections[].topics` e apresenta checkboxes por conexão.
+- A seleção do State Driver é sempre um subconjunto dos tópicos já assinados.
+- O salvamento usa a API oficial do Supervisor e solicita reinício do Bridge.
+- Validação server-side bloqueia tópico que não esteja presente em `topics`.
+- Mantém compatibilidade com `state_driver_topics` em YAML.
+- Mantém baseline inicial, supressão de eventos repetidos e `state_driver_publish_raw`.
+- Não altera `seiden/lca/interactions`, TCA, Environmental Sources, EVO Direct ou EVO Relay.
+
 ## 0.14.2 — Compatibilidade segura do MQTT State Driver
 
 - Corrige o schema do Home Assistant Supervisor sem usar sintaxe inválida para lista opcional.

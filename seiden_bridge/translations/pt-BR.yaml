@@ -1,0 +1,14 @@
+configuration:
+  mqtt_connections:
+    name: Conexões MQTT
+    description: Configure a assinatura MQTT. Para selecionar tópicos do State Driver, prefira a interface web do Seiden Bridge.
+    fields:
+      state_driver_enabled:
+        name: Ativar MQTT State Driver
+      state_driver_topics:
+        name: Tópicos do State Driver (compatibilidade)
+        description: Mantido para compatibilidade. Prefira Abrir interface web para selecionar os tópicos com checkboxes.
+      state_driver_field_prefix:
+        name: Prefixo de estado
+      state_driver_publish_raw:
+        name: Publicar payload bruto
