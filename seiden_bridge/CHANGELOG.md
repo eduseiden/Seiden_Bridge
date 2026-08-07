@@ -1,3 +1,14 @@
+## 0.14.1 — MQTT State Driver: seleção explícita de tópicos
+
+- Adiciona `state_driver_topics` como lista explícita de filtros MQTT processados pelo State Driver.
+- `topics` continua sendo a lista geral de assinaturas da conexão e não muda de semântica.
+- O State Driver não atua mais implicitamente sobre todos os tópicos assinados.
+- `seiden/lca/interactions`, fontes TCA, sensores e demais tópicos permanecem totalmente independentes, salvo se forem explicitamente incluídos em `state_driver_topics`.
+- `state_driver_publish_raw: false` continua suprimindo apenas payloads efetivamente tratados pelo State Driver.
+- Habilitar o State Driver sem `state_driver_topics` agora resulta em fail-safe: o driver é desabilitado e o fluxo MQTT legado é mantido.
+- Mantém cache mínimo em RAM, baseline sem evento, zero polling adicional e zero threads adicionais.
+- Mantém schema canônico de eventos 2.0 e compatibilidade com EVO Direct, EVO Relay e Environmental Source Registry.
+
 ## 0.14.0 — MQTT State Driver
 
 - Adiciona detecção de transições reais de estado em payloads MQTT.

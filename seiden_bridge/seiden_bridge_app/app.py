@@ -27,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.14.0"
+BRIDGE_VERSION = "0.14.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -297,13 +297,38 @@ def find_environment_source(connection: dict[str, Any], topic: str) -> dict[str,
 def _normalize_mqtt_state_driver(mqtt_connection: dict[str, Any]) -> dict[str, Any]:
     """Normaliza a configuração opt-in do MQTT State Driver.
 
-    O driver usa exatamente os tópicos já assinados pela conexão e acompanha
-    somente campos iniciados por ``state_`` (prefixo configurável). Isso mantém
-    a configuração pequena e evita assinaturas amplas desnecessárias.
+    A partir da 0.14.1 o driver atua **somente** nos filtros declarados em
+    ``state_driver_topics``. Isso separa explicitamente os tópicos recebidos
+    pela conexão MQTT dos tópicos que representam estados operacionais.
+
+    Se o driver for habilitado sem tópicos explícitos, ele é desabilitado de
+    forma segura e o MQTT legado continua publicando os payloads brutos.
     """
+    enabled = bool(mqtt_connection.get("state_driver_enabled", False))
+    configured_topics = mqtt_connection.get("state_driver_topics", [])
+    name = str(mqtt_connection.get("name") or mqtt_connection.get("id") or "MQTT")
+
+    if configured_topics is None:
+        configured_topics = []
+    if not isinstance(configured_topics, list):
+        LOGGER.warning(
+            "[MQTT STATE][%s] state_driver_topics deve ser uma lista; State Driver desabilitado.",
+            name,
+        )
+        configured_topics = []
+        enabled = False
+
+    topics = [str(item).strip() for item in configured_topics if str(item).strip()]
+    if enabled and not topics:
+        LOGGER.warning(
+            "[MQTT STATE][%s] habilitado sem state_driver_topics; driver desabilitado por segurança.",
+            name,
+        )
+        enabled = False
+
     return {
-        "enabled": bool(mqtt_connection.get("state_driver_enabled", False)),
-        "topics": [],  # vazio = todos os tópicos já assinados por esta conexão
+        "enabled": enabled,
+        "topics": topics,
         "fields": [],  # vazio = todos os campos com o prefixo configurado
         "field_prefix": str(mqtt_connection.get("state_driver_field_prefix", "state_")).strip(),
         "publish_raw": bool(mqtt_connection.get("state_driver_publish_raw", True)),
@@ -428,6 +453,12 @@ def build_connections_from_config(
         qos = int(mqtt_connection.get("qos", 0))
         event_type = str(mqtt_connection.get("event_type", "mqtt.message_received"))
         state_driver = _normalize_mqtt_state_driver(mqtt_connection)
+        if state_driver.get("enabled"):
+            LOGGER.info(
+                "[MQTT STATE][%s] ativo em %d tópico(s) explícito(s).",
+                mqtt_connection.get("name") or connection_id,
+                len(state_driver.get("topics") or []),
+            )
         normalized_mqtt = {
             "id": connection_id,
             "name": mqtt_connection.get("name"),

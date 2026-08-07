@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.14.0
+version: 0.14.1
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação
   de eventos canônicos
@@ -82,6 +82,8 @@ schema:
     qos: int(0,2)?
     event_type: str?
     state_driver_enabled: bool?
+    state_driver_topics:
+    - str
     state_driver_field_prefix: str?
     state_driver_publish_raw: bool?
     topics:
