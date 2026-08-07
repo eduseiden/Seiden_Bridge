@@ -1,4 +1,4 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.13.1."""
+"""Modelo canônico de eventos do Seiden Bridge 0.14.0."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -91,6 +91,64 @@ def create_presence_event(*, reader: dict[str, Any], record: dict[str, Any], ope
         **operational,
     })
     return payload
+
+
+
+def create_mqtt_state_transition_event(
+    *,
+    connection: dict[str, Any],
+    topic: str,
+    device_name: str,
+    field: str,
+    channel: str,
+    previous_state: Any,
+    current_state: Any,
+) -> dict[str, Any]:
+    """Cria evento canônico compacto para uma mudança real de estado MQTT."""
+    timestamp = utc_now()
+    device_id = device_name.strip().lower().replace(" ", "_")
+    return {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid4()),
+        "event_type": "state_transition",
+        "source": "seiden_bridge",
+        "timestamp": timestamp,
+        "connection": {
+            "id": connection["id"],
+            "name": connection["name"],
+            "type": "message_broker",
+            "connector": "mqtt",
+            "endpoint": {
+                "host": connection.get("host"),
+                "port": connection.get("port", 1883),
+            },
+        },
+        "context": {
+            "interaction_type": "state_change",
+            "direction": None,
+        },
+        "operation": {
+            "action": "state_changed",
+            "field": field,
+            "channel": channel,
+            "previous_state": previous_state,
+            "current_state": current_state,
+        },
+        "device": {
+            "id": device_id,
+            "name": device_name,
+            "topic": topic,
+        },
+        "connection_id": connection["id"],
+        "connector": "mqtt",
+        "topic": topic,
+        "device_id": device_id,
+        "device_name": device_name,
+        "field": field,
+        "channel": channel,
+        "previous_state": previous_state,
+        "current_state": current_state,
+    }
 
 
 def create_mqtt_event(

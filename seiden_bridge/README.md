@@ -1,9 +1,80 @@
-# Seiden Bridge 0.13.1
+# Seiden Bridge 0.14.0
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-### Ajustes 0.13.1
+## MQTT State Driver — 0.14.0
+
+O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
+
+O primeiro payload recebido após a inicialização estabelece o baseline e **não gera evento**, evitando ações falsas em restart ou mensagens retained.
+
+Exemplo recomendado — assine somente os dispositivos que realmente precisam gerar transições:
+
+```yaml
+mqtt_connections:
+  - id: mqtt_casa
+    name: MQTT Casa
+    enabled: true
+    host: core-mosquitto
+    port: 1883
+    username: mqtt_user
+    password: senha
+
+    topics:
+      - zigbee2mqtt/Interruptor Suite Sacada
+
+    state_driver_enabled: true
+    state_driver_field_prefix: state_
+
+    # false = para tópicos com state_*, publica somente transições reais.
+    # Fontes ambientais continuam publicando seus eventos normalmente.
+    state_driver_publish_raw: false
+```
+
+Com um payload como:
+
+```json
+{
+  "state_l1": "ON",
+  "state_l2": "OFF",
+  "state_l3": "OFF",
+  "state_l4": "OFF",
+  "linkquality": 104,
+  "last_seen": "2026-08-07T15:30:46.160Z"
+}
+```
+
+uma mudança de `state_l1` produz um único evento canônico:
+
+```json
+{
+  "event_type": "state_transition",
+  "connector": "mqtt",
+  "device_name": "Interruptor Suite Sacada",
+  "channel": "l1",
+  "previous_state": "OFF",
+  "current_state": "ON"
+}
+```
+
+`linkquality`, `last_seen`, backlight e demais campos não entram no cache de estados nem geram transições.
+
+### Estratégia de volume
+
+- **Assinatura seletiva:** em produção, prefira tópicos exatos; não assine `zigbee2mqtt/#` se o módulo precisa de poucos dispositivos.
+- **Cache mínimo:** somente os valores `state_*` mais recentes ficam em RAM; nenhum histórico MQTT é mantido.
+- **Baseline silencioso:** a primeira mensagem de cada tópico não gera evento.
+- **Deduplicação por estado:** payload repetido gera zero eventos.
+- **Evento por mudança:** somente canais cujo estado realmente mudou são publicados.
+- **Payload bruto opcional:** `state_driver_publish_raw: false` evita duplicar o payload MQTT no barramento para tópicos tratados.
+- **Sem polling adicional:** o driver trabalha no mesmo callback MQTT já existente; não cria threads, timers ou consultas extras.
+- **Telemetria separada:** `last_seen`, `linkquality` e disponibilidade podem alimentar saúde de infraestrutura no futuro sem contaminar eventos operacionais.
+
+O State Driver é **opt-in**. Com `state_driver_enabled` ausente ou `false`, o comportamento MQTT da versão anterior permanece inalterado.
+
+
+### Ajustes 0.14.0
 
 - `reader_ip` do EVO Relay passa a vir de `devinfo.curip` recebido no `reg`; o servidor upstream fica separado em `relay_server` e `relay_port`.
 - O resumo de inicialização conta leitores EVO Relay e conexões MQTT corretamente.
@@ -13,7 +84,7 @@ Camada de integração do Seiden One. Captura dados de múltiplas origens, norma
 
 ## EVO Relay WebSocket
 
-A versão 0.13.1 consolida o modo EVO Relay introduzido na 0.13.0: o Bridge pode receber conexões WebSocket dos faciais, encaminhá-las de forma transparente ao servidor EVO existente e, ao mesmo tempo, extrair os eventos `sendlog` e suas imagens Base64.
+A versão 0.14.0 consolida o modo EVO Relay introduzido na 0.13.0: o Bridge pode receber conexões WebSocket dos faciais, encaminhá-las de forma transparente ao servidor EVO existente e, ao mesmo tempo, extrair os eventos `sendlog` e suas imagens Base64.
 
 O servidor/porta são configurados uma única vez e vários equipamentos são associados pelo `serial_number`. Cada equipamento pode ter cliente, site, nome e direção operacional `in`, `out` ou `none`.
 

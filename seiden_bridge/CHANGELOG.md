@@ -1,4 +1,16 @@
-## 0.13.1 — Consolidação EVO Relay
+## 0.14.0 — MQTT State Driver
+
+- Adiciona detecção de transições reais de estado em payloads MQTT.
+- Mantém cache mínimo em memória por conexão/tópico somente dos campos acompanhados.
+- Primeiro payload estabelece baseline e não gera evento artificial.
+- Publica `state_transition` compacto no `seiden_bridge_event`.
+- Permite restringir tópicos e campos de estado explicitamente.
+- Permite suprimir o payload MQTT bruto em tópicos tratados (`state_driver_publish_raw: false`).
+- Ignora mudanças de telemetria como `last_seen` e `linkquality` quando não fazem parte dos campos de estado.
+- Preserva Environmental Source Registry, EVO Direct, EVO Relay e comportamento MQTT legado quando o State Driver está desabilitado.
+- Mantém schema canônico 2.0.
+
+## 0.14.0 — Consolidação EVO Relay
 
 - Corrige `reader_ip` para usar o IP real informado pelo terminal em `devinfo.curip`.
 - Separa `relay_server` e `relay_port` do endereço físico do leitor nos eventos canônicos.

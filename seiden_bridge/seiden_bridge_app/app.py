@@ -15,7 +15,7 @@ import requests
 
 from .connectors import execute_connection_command, get_connector
 from .connectors.evo_relay import EvoRelayConnector
-from .events import create_presence_event, create_mqtt_event
+from .events import create_presence_event, create_mqtt_event, create_mqtt_state_transition_event
 
 
 CONFIG_PATH = Path("/data/options.json")
@@ -27,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.13.1"
+BRIDGE_VERSION = "0.14.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -293,6 +293,68 @@ def find_environment_source(connection: dict[str, Any], topic: str) -> dict[str,
     return None
 
 
+
+def _normalize_mqtt_state_driver(mqtt_connection: dict[str, Any]) -> dict[str, Any]:
+    """Normaliza a configuração opt-in do MQTT State Driver.
+
+    O driver usa exatamente os tópicos já assinados pela conexão e acompanha
+    somente campos iniciados por ``state_`` (prefixo configurável). Isso mantém
+    a configuração pequena e evita assinaturas amplas desnecessárias.
+    """
+    return {
+        "enabled": bool(mqtt_connection.get("state_driver_enabled", False)),
+        "topics": [],  # vazio = todos os tópicos já assinados por esta conexão
+        "fields": [],  # vazio = todos os campos com o prefixo configurado
+        "field_prefix": str(mqtt_connection.get("state_driver_field_prefix", "state_")).strip(),
+        "publish_raw": bool(mqtt_connection.get("state_driver_publish_raw", True)),
+    }
+
+
+def _mqtt_topic_matches(filters: list[str], topic: str) -> bool:
+    """Compara um tópico com filtros MQTT sem criar assinaturas extras."""
+    if not filters:
+        return True
+    try:
+        import paho.mqtt.client as mqtt
+        return any(mqtt.topic_matches_sub(item, topic) for item in filters)
+    except Exception:
+        # Fallback conservador para filtros exatos.
+        return topic in filters
+
+
+def _state_driver_extract(
+    state_driver: dict[str, Any],
+    payload: Any,
+) -> dict[str, Any]:
+    """Extrai somente os campos operacionais acompanhados pelo driver."""
+    if not isinstance(payload, dict):
+        return {}
+
+    configured_fields = set(state_driver.get("fields") or [])
+    prefix = str(state_driver.get("field_prefix") or "state_")
+
+    extracted: dict[str, Any] = {}
+    for key, value in payload.items():
+        key_str = str(key)
+        if configured_fields:
+            if key_str not in configured_fields:
+                continue
+        elif prefix and not key_str.startswith(prefix):
+            continue
+
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            extracted[key_str] = value
+
+    return extracted
+
+
+def _state_driver_channel(field: str, prefix: str) -> str:
+    """Remove somente o prefixo técnico; não inventa aliases físicos."""
+    if prefix and field.startswith(prefix):
+        return field[len(prefix):]
+    return field
+
+
 def build_connections_from_config(
     config: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -365,6 +427,7 @@ def build_connections_from_config(
 
         qos = int(mqtt_connection.get("qos", 0))
         event_type = str(mqtt_connection.get("event_type", "mqtt.message_received"))
+        state_driver = _normalize_mqtt_state_driver(mqtt_connection)
         normalized_mqtt = {
             "id": connection_id,
             "name": mqtt_connection.get("name"),
@@ -388,6 +451,7 @@ def build_connections_from_config(
                 for topic in merged_topics
             ],
             "environment_sources": source_items,
+            "state_driver": state_driver,
             "tls": {
                 "enabled": mqtt_connection.get("tls_enabled", False),
                 "verify": mqtt_connection.get("tls_verify", True),
@@ -883,36 +947,49 @@ def update_last_photo_file(
     temporary_path = LAST_PHOTO_DIR / f".{unique_name}.tmp"
 
     try:
-        response = requests.get(
-            photo_url,
-            timeout=request_timeout,
-            stream=True,
-        )
-        response.raise_for_status()
-
-        content_type = response.headers.get("Content-Type", "").lower()
-        if content_type and not (
-            "image/jpeg" in content_type or "image/jpg" in content_type
-        ):
-            return False, None, f"Tipo de conteúdo não suportado: {content_type}"
-
         LAST_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-        total = 0
-        with temporary_path.open("wb") as file_handle:
-            for chunk in response.iter_content(chunk_size=65536):
-                if not chunk:
-                    continue
-                total += len(chunk)
-                if total > maximum_bytes:
-                    raise ValueError(
-                        f"Imagem excede o limite de {maximum_size_mb} MB"
-                    )
-                file_handle.write(chunk)
 
-        if total == 0:
-            raise ValueError("Imagem recebida está vazia")
+        if str(photo_url).startswith("/local/seiden_bridge/"):
+            relative = str(photo_url)[len("/local/seiden_bridge/"):].lstrip("/")
+            source_path = LAST_PHOTO_DIR / relative
+            if not source_path.exists() or not source_path.is_file():
+                raise OSError(f"Imagem local não encontrada: {source_path}")
+            total = source_path.stat().st_size
+            if total <= 0:
+                raise ValueError("Imagem local está vazia")
+            if total > maximum_bytes:
+                raise ValueError(f"Imagem excede o limite de {maximum_size_mb} MB")
+            target_path.write_bytes(source_path.read_bytes())
+        else:
+            response = requests.get(
+                photo_url,
+                timeout=request_timeout,
+                stream=True,
+            )
+            response.raise_for_status()
 
-        temporary_path.replace(target_path)
+            content_type = response.headers.get("Content-Type", "").lower()
+            if content_type and not (
+                "image/jpeg" in content_type or "image/jpg" in content_type
+            ):
+                return False, None, f"Tipo de conteúdo não suportado: {content_type}"
+
+            total = 0
+            with temporary_path.open("wb") as file_handle:
+                for chunk in response.iter_content(chunk_size=65536):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > maximum_bytes:
+                        raise ValueError(
+                            f"Imagem excede o limite de {maximum_size_mb} MB"
+                        )
+                    file_handle.write(chunk)
+
+            if total == 0:
+                raise ValueError("Imagem recebida está vazia")
+
+            temporary_path.replace(target_path)
 
         # Mantém também um arquivo estável para acesso manual e compatibilidade.
         try:
@@ -2098,8 +2175,12 @@ def main() -> None:
     mqtt_connections = [item for item in active_readers if item.get("connector") == "mqtt"]
 
     mqtt_clients = []
+    mqtt_state_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    mqtt_state_lock = threading.RLock()
+
     for connection in mqtt_connections:
         connector = get_connector("mqtt")
+
         def handle_mqtt_event(conn: dict[str, Any], topic: str, payload: Any, raw: bytes) -> None:
             environment_source = find_environment_source(conn, topic)
             measurements = None
@@ -2117,18 +2198,86 @@ def main() -> None:
                         environment_source["name"],
                         measurements,
                     )
-            fire_event_names(
-                supervisor_token=supervisor_token,
-                event_names=mqtt_bridge_events,
-                payload=create_mqtt_event(
-                    connection=conn,
-                    topic=topic,
-                    payload=payload,
-                    environment_source=environment_source,
-                    measurements=measurements,
-                ),
-                request_timeout=request_timeout,
+
+            state_driver = conn.get("state_driver") or {}
+            state_driver_handled = False
+            if state_driver.get("enabled") and _mqtt_topic_matches(state_driver.get("topics") or [], topic):
+                current = _state_driver_extract(state_driver, payload)
+                if current:
+                    state_driver_handled = True
+                    cache_key = (str(conn["id"]), topic)
+                    with mqtt_state_lock:
+                        previous = mqtt_state_cache.get(cache_key)
+                        if previous is None:
+                            # Baseline: retained/startup payloads nunca viram ações falsas.
+                            mqtt_state_cache[cache_key] = dict(current)
+                            LOGGER.debug(
+                                "[MQTT STATE][%s] baseline %s: %s",
+                                conn["name"],
+                                topic,
+                                current,
+                            )
+                            transitions: list[tuple[str, Any, Any]] = []
+                        else:
+                            transitions = [
+                                (field, previous.get(field), value)
+                                for field, value in current.items()
+                                if field in previous and previous.get(field) != value
+                            ]
+                            # Campos que aparecem pela primeira vez entram no baseline sem evento.
+                            merged = dict(previous)
+                            merged.update(current)
+                            mqtt_state_cache[cache_key] = merged
+
+                    prefix = str(state_driver.get("field_prefix") or "state_")
+                    device_name = topic.rsplit("/", 1)[-1] if "/" in topic else topic
+                    for field, previous_value, current_value in transitions:
+                        channel = _state_driver_channel(field, prefix)
+                        transition_event = create_mqtt_state_transition_event(
+                            connection=conn,
+                            topic=topic,
+                            device_name=device_name,
+                            field=field,
+                            channel=channel,
+                            previous_state=previous_value,
+                            current_state=current_value,
+                        )
+                        fire_event_names(
+                            supervisor_token=supervisor_token,
+                            event_names=mqtt_bridge_events,
+                            payload=transition_event,
+                            request_timeout=request_timeout,
+                        )
+                        LOGGER.info(
+                            "[MQTT STATE][%s] %s · %s: %s → %s",
+                            conn["name"],
+                            device_name,
+                            channel,
+                            previous_value,
+                            current_value,
+                        )
+
+            # Compatibilidade: fontes ambientais continuam publicando sempre.
+            # Para tópicos tratados pelo State Driver, o payload bruto pode ser
+            # suprimido para reduzir drasticamente volume no barramento.
+            publish_raw = (
+                environment_source is not None
+                or not state_driver_handled
+                or bool((conn.get("state_driver") or {}).get("publish_raw", True))
             )
+            if publish_raw:
+                fire_event_names(
+                    supervisor_token=supervisor_token,
+                    event_names=mqtt_bridge_events,
+                    payload=create_mqtt_event(
+                        connection=conn,
+                        topic=topic,
+                        payload=payload,
+                        environment_source=environment_source,
+                        measurements=measurements,
+                    ),
+                    request_timeout=request_timeout,
+                )
 
         client = connector.start(connection, handle_mqtt_event)
         mqtt_clients.append(client)
