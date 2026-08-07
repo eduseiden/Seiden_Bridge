@@ -1,11 +1,11 @@
-# Seiden Bridge 0.14.1.1
+# Seiden Bridge 0.14.2
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.1.1
+## MQTT State Driver — 0.14.2
 
-A versão 0.14.1.1 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
+A versão 0.14.2 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
 
 Isso evita que sensores, fontes TCA, `seiden/lca/interactions` ou qualquer tópico futuro com campos semelhantes sejam interpretados acidentalmente pelo State Driver.
 
@@ -30,9 +30,9 @@ mqtt_connections:
       - zigbee2mqtt/Interruptor Suite Sacada
 
     state_driver_enabled: true
-    state_driver_topics:
-      - zigbee2mqtt/Interruptor Sala
-      - zigbee2mqtt/Interruptor Suite Sacada
+    state_driver_topics: |-
+      zigbee2mqtt/Interruptor Sala
+      zigbee2mqtt/Interruptor Suite Sacada
     state_driver_field_prefix: state_
     state_driver_publish_raw: false
 ```
@@ -45,6 +45,9 @@ mqtt_connections:
 - `state_driver_publish_raw: false` suprime o payload bruto **somente quando aquele tópico foi efetivamente tratado pelo State Driver**;
 - o primeiro payload de cada tópico estabelece baseline e não gera transição;
 - mensagens em que apenas `last_seen`, `linkquality` ou outros campos mudaram geram zero eventos de estado.
+
+
+> **Compatibilidade com Home Assistant:** `state_driver_topics` é um campo opcional multilinha. Informe um tópico por linha. Isso permite atualizar instalações antigas sem exigir que a nova opção já exista no YAML salvo pelo Supervisor.
 
 Se `state_driver_enabled: true` for usado sem `state_driver_topics`, o driver é desabilitado de forma segura e o comportamento MQTT legado é preservado.
 

@@ -1,9 +1,9 @@
-# Seiden Bridge 0.14.1.1
+# Seiden Bridge 0.14.2
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.1.1
+## MQTT State Driver — 0.14.2
 
 O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
 
@@ -25,8 +25,9 @@ mqtt_connections:
       - zigbee2mqtt/Interruptor Suite Sacada
 
     state_driver_enabled: true
-    state_driver_topics:
-      - zigbee2mqtt/Interruptor Suite Sacada
+    state_driver_topics: |-
+      zigbee2mqtt/Interruptor Sala
+      zigbee2mqtt/Interruptor Suite Sacada
     state_driver_field_prefix: state_
 
     # false = para tópicos com state_*, publica somente transições reais.
@@ -72,6 +73,9 @@ uma mudança de `state_l1` produz um único evento canônico:
 - **Payload bruto opcional:** `state_driver_publish_raw: false` evita duplicar o payload MQTT no barramento para tópicos tratados.
 - **Sem polling adicional:** o driver trabalha no mesmo callback MQTT já existente; não cria threads, timers ou consultas extras.
 - **Telemetria separada:** `last_seen`, `linkquality` e disponibilidade podem alimentar saúde de infraestrutura no futuro sem contaminar eventos operacionais.
+
+
+> **Compatibilidade com Home Assistant:** `state_driver_topics` é um campo opcional multilinha. Informe um tópico por linha. Isso permite atualizar instalações antigas sem exigir que a nova opção já exista no YAML salvo pelo Supervisor.
 
 O State Driver é **opt-in**. Com `state_driver_enabled` ausente ou `false`, o comportamento MQTT da versão anterior permanece inalterado.
 

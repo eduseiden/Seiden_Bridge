@@ -1,8 +1,11 @@
-## 0.14.1.1 — Compatibilidade de atualização do State Driver
+## 0.14.2 — Compatibilidade segura do MQTT State Driver
 
-- `state_driver_topics` passa a ser opcional no schema do add-on, permitindo atualizar instalações 0.13.x/0.14.0 cujo YAML ainda não contém a nova chave.
-- Fail-safe mantido: quando o State Driver estiver habilitado sem tópicos explícitos, ele permanece desativado e o MQTT legado continua funcionando.
-- Nenhuma alteração funcional nos conectores ou no modelo canônico.
+- Corrige o schema do Home Assistant Supervisor sem usar sintaxe inválida para lista opcional.
+- `state_driver_topics` passa a usar o tipo oficialmente suportado `str?`, informado como bloco YAML multilinha (um tópico por linha).
+- O runtime aceita linhas, vírgulas ou ponto-e-vírgula como separadores e mantém fallback defensivo para listas em execução local.
+- Instalações anteriores que ainda não possuem `state_driver_topics` podem atualizar sem erro `Missing option`.
+- O State Driver continua fail-safe: habilitado sem tópicos explícitos, permanece inativo e o fluxo MQTT legado segue intacto.
+- Nenhuma mudança no modelo canônico, EVO Direct, EVO Relay, TCA, Environmental Sources ou `seiden/lca/interactions`.
 
 ## 0.14.1 — MQTT State Driver: seleção explícita de tópicos
 

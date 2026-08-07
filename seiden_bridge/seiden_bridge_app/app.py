@@ -27,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.14.1.1"
+BRIDGE_VERSION = "0.14.2"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -297,7 +297,7 @@ def find_environment_source(connection: dict[str, Any], topic: str) -> dict[str,
 def _normalize_mqtt_state_driver(mqtt_connection: dict[str, Any]) -> dict[str, Any]:
     """Normaliza a configuração opt-in do MQTT State Driver.
 
-    A partir da 0.14.1.1 o driver atua **somente** nos filtros declarados em
+    A partir da 0.14.2 o driver atua **somente** nos filtros declarados em
     ``state_driver_topics``. Isso separa explicitamente os tópicos recebidos
     pela conexão MQTT dos tópicos que representam estados operacionais.
 
@@ -305,20 +305,32 @@ def _normalize_mqtt_state_driver(mqtt_connection: dict[str, Any]) -> dict[str, A
     forma segura e o MQTT legado continua publicando os payloads brutos.
     """
     enabled = bool(mqtt_connection.get("state_driver_enabled", False))
-    configured_topics = mqtt_connection.get("state_driver_topics", [])
+    configured_topics = mqtt_connection.get("state_driver_topics")
     name = str(mqtt_connection.get("name") or mqtt_connection.get("id") or "MQTT")
 
+    # Home Assistant Supervisor não oferece sintaxe documentada para uma
+    # lista estrutural "verdadeiramente opcional" dentro deste schema aninhado.
+    # Para preservar upgrade de instalações existentes, o schema usa `str?`.
+    # O usuário pode informar um bloco YAML multilinha, uma linha por tópico.
+    # Também aceitamos vírgula ou ponto-e-vírgula como separadores.
     if configured_topics is None:
-        configured_topics = []
-    if not isinstance(configured_topics, list):
+        topics = []
+    elif isinstance(configured_topics, str):
+        topics = [
+            item.strip()
+            for item in re.split(r"[\n,;]+", configured_topics)
+            if item.strip()
+        ]
+    elif isinstance(configured_topics, list):
+        # Compatibilidade defensiva fora do Supervisor / testes locais.
+        topics = [str(item).strip() for item in configured_topics if str(item).strip()]
+    else:
         LOGGER.warning(
-            "[MQTT STATE][%s] state_driver_topics deve ser uma lista; State Driver desabilitado.",
+            "[MQTT STATE][%s] state_driver_topics inválido; State Driver desabilitado.",
             name,
         )
-        configured_topics = []
+        topics = []
         enabled = False
-
-    topics = [str(item).strip() for item in configured_topics if str(item).strip()]
     if enabled and not topics:
         LOGGER.warning(
             "[MQTT STATE][%s] habilitado sem state_driver_topics; driver desabilitado por segurança.",

@@ -1,4 +1,4 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.14.1.1."""
+"""Modelo canônico de eventos do Seiden Bridge 0.14.2."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
