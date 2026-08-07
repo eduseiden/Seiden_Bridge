@@ -1,15 +1,15 @@
-# Seiden Bridge 0.14.1
+# Seiden Bridge 0.14.1.1
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.1
+## MQTT State Driver — 0.14.1.1
 
-A versão 0.14.1 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
+O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
 
-Isso evita que sensores, fontes TCA, `seiden/lca/interactions` ou qualquer tópico futuro com campos semelhantes sejam interpretados acidentalmente pelo State Driver.
+O primeiro payload recebido após a inicialização estabelece o baseline e **não gera evento**, evitando ações falsas em restart ou mensagens retained.
 
-Exemplo recomendado:
+Exemplo recomendado — assine somente os dispositivos que realmente precisam gerar transições:
 
 ```yaml
 mqtt_connections:
@@ -19,34 +19,62 @@ mqtt_connections:
     host: core-mosquitto
     port: 1883
     username: mqtt_user
-    password: SUA_SENHA
-    event_type: mqtt.message_received
+    password: senha
 
     topics:
-      - zigbee2mqtt/SensorPortaGeladeira
-      - seiden/tca/sources/energia_geladeira
-      - seiden/lca/interactions
-      - zigbee2mqtt/Interruptor Sala
       - zigbee2mqtt/Interruptor Suite Sacada
 
     state_driver_enabled: true
     state_driver_topics:
-      - zigbee2mqtt/Interruptor Sala
       - zigbee2mqtt/Interruptor Suite Sacada
     state_driver_field_prefix: state_
+
+    # false = para tópicos com state_*, publica somente transições reais.
+    # Fontes ambientais continuam publicando seus eventos normalmente.
     state_driver_publish_raw: false
 ```
 
-**Comportamento:**
+Com um payload como:
 
-- tópicos presentes apenas em `topics` continuam no fluxo MQTT normal;
-- somente tópicos que também aparecem em `state_driver_topics` são analisados pelo State Driver;
-- `seiden/lca/interactions` e fontes TCA não são afetados;
-- `state_driver_publish_raw: false` suprime o payload bruto **somente quando aquele tópico foi efetivamente tratado pelo State Driver**;
-- o primeiro payload de cada tópico estabelece baseline e não gera transição;
-- mensagens em que apenas `last_seen`, `linkquality` ou outros campos mudaram geram zero eventos de estado.
+```json
+{
+  "state_l1": "ON",
+  "state_l2": "OFF",
+  "state_l3": "OFF",
+  "state_l4": "OFF",
+  "linkquality": 104,
+  "last_seen": "2026-08-07T15:30:46.160Z"
+}
+```
 
-Se `state_driver_enabled: true` for usado sem `state_driver_topics`, o driver é desabilitado de forma segura e o comportamento MQTT legado é preservado.
+uma mudança de `state_l1` produz um único evento canônico:
+
+```json
+{
+  "event_type": "state_transition",
+  "connector": "mqtt",
+  "device_name": "Interruptor Suite Sacada",
+  "channel": "l1",
+  "previous_state": "OFF",
+  "current_state": "ON"
+}
+```
+
+`linkquality`, `last_seen`, backlight e demais campos não entram no cache de estados nem geram transições.
+
+### Estratégia de volume
+
+- **Assinatura seletiva:** em produção, prefira tópicos exatos; não assine `zigbee2mqtt/#` se o módulo precisa de poucos dispositivos.
+- **Cache mínimo:** somente os valores `state_*` mais recentes ficam em RAM; nenhum histórico MQTT é mantido.
+- **Baseline silencioso:** a primeira mensagem de cada tópico não gera evento.
+- **Deduplicação por estado:** payload repetido gera zero eventos.
+- **Evento por mudança:** somente canais cujo estado realmente mudou são publicados.
+- **Payload bruto opcional:** `state_driver_publish_raw: false` evita duplicar o payload MQTT no barramento para tópicos tratados.
+- **Sem polling adicional:** o driver trabalha no mesmo callback MQTT já existente; não cria threads, timers ou consultas extras.
+- **Telemetria separada:** `last_seen`, `linkquality` e disponibilidade podem alimentar saúde de infraestrutura no futuro sem contaminar eventos operacionais.
+
+O State Driver é **opt-in**. Com `state_driver_enabled` ausente ou `false`, o comportamento MQTT da versão anterior permanece inalterado.
+
 
 ### Ajustes 0.14.0
 

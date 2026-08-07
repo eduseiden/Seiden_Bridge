@@ -1,3 +1,9 @@
+## 0.14.1.1 — Compatibilidade de atualização do State Driver
+
+- `state_driver_topics` passa a ser opcional no schema do add-on, permitindo atualizar instalações 0.13.x/0.14.0 cujo YAML ainda não contém a nova chave.
+- Fail-safe mantido: quando o State Driver estiver habilitado sem tópicos explícitos, ele permanece desativado e o MQTT legado continua funcionando.
+- Nenhuma alteração funcional nos conectores ou no modelo canônico.
+
 ## 0.14.1 — MQTT State Driver: seleção explícita de tópicos
 
 - Adiciona `state_driver_topics` como lista explícita de filtros MQTT processados pelo State Driver.

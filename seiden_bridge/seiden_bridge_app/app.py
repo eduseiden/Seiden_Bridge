@@ -27,7 +27,7 @@ DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
 SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
-BRIDGE_VERSION = "0.14.1"
+BRIDGE_VERSION = "0.14.1.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -297,7 +297,7 @@ def find_environment_source(connection: dict[str, Any], topic: str) -> dict[str,
 def _normalize_mqtt_state_driver(mqtt_connection: dict[str, Any]) -> dict[str, Any]:
     """Normaliza a configuração opt-in do MQTT State Driver.
 
-    A partir da 0.14.1 o driver atua **somente** nos filtros declarados em
+    A partir da 0.14.1.1 o driver atua **somente** nos filtros declarados em
     ``state_driver_topics``. Isso separa explicitamente os tópicos recebidos
     pela conexão MQTT dos tópicos que representam estados operacionais.
 

@@ -1,11 +1,11 @@
-# Seiden Bridge 0.14.1
+# Seiden Bridge 0.14.1.1
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.1
+## MQTT State Driver — 0.14.1.1
 
-A versão 0.14.1 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
+A versão 0.14.1.1 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
 
 Isso evita que sensores, fontes TCA, `seiden/lca/interactions` ou qualquer tópico futuro com campos semelhantes sejam interpretados acidentalmente pelo State Driver.
 

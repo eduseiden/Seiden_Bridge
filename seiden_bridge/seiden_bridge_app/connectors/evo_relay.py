@@ -1,4 +1,4 @@
-"""EVO WebSocket relay connector for Seiden Bridge 0.14.1."""
+"""EVO WebSocket relay connector for Seiden Bridge 0.14.1.1."""
 from __future__ import annotations
 
 import asyncio
