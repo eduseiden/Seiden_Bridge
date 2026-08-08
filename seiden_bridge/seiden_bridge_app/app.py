@@ -15,7 +15,13 @@ import requests
 
 from .connectors import execute_connection_command, get_connector
 from .connectors.evo_relay import EvoRelayConnector
-from .events import create_presence_event, create_mqtt_event, create_mqtt_state_transition_event
+from .ha_state_driver import start_ha_state_driver
+from .events import (
+    create_presence_event,
+    create_mqtt_event,
+    create_mqtt_state_transition_event,
+    create_ha_state_transition_event,
+)
 
 
 CONFIG_PATH = Path("/data/options.json")
@@ -29,7 +35,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.14.3"
+BRIDGE_VERSION = "0.15.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -2329,6 +2335,39 @@ def main() -> None:
         client = connector.start(connection, handle_mqtt_event)
         mqtt_clients.append(client)
 
+    def handle_ha_state_transition(
+        entity_id: str,
+        previous_state: Any,
+        current_state: Any,
+        friendly_name: str | None,
+        ha_context: dict[str, Any],
+    ) -> None:
+        transition_event = create_ha_state_transition_event(
+            entity_id=entity_id,
+            previous_state=previous_state,
+            current_state=current_state,
+            friendly_name=friendly_name,
+            ha_context=ha_context,
+        )
+        fire_event_names(
+            supervisor_token=supervisor_token,
+            event_names=[bridge_event],
+            payload=transition_event,
+            request_timeout=request_timeout,
+        )
+        LOGGER.info(
+            "[HA STATE] %s: %s → %s",
+            entity_id,
+            previous_state,
+            current_state,
+        )
+
+    ha_state_thread = start_ha_state_driver(
+        config=config,
+        supervisor_token=supervisor_token,
+        emit=handle_ha_state_transition,
+    )
+
     relay_connector = EvoRelayConnector()
     relay_threads = []
     for relay in evo_relays:
@@ -2391,15 +2430,20 @@ def main() -> None:
     )
 
     if not polling_readers:
-        if mqtt_connections or evo_relays:
-            LOGGER.info("Bridge operando somente com streaming: MQTT=%d EVO Relay=%d", len(mqtt_connections), len(evo_relays))
+        if mqtt_connections or evo_relays or ha_state_thread:
+            LOGGER.info(
+                "Bridge operando somente com streaming: MQTT=%d EVO Relay=%d HA State=%d",
+                len(mqtt_connections),
+                len(evo_relays),
+                1 if ha_state_thread else 0,
+            )
         wait_without_active_readers(
             state=state,
             supervisor_token=supervisor_token,
             request_timeout=request_timeout,
             publish_last_photo=publish_last_photo,
             photo_max_size_mb=photo_max_size_mb,
-            streaming_active=bool(mqtt_connections or evo_relays),
+            streaming_active=bool(mqtt_connections or evo_relays or ha_state_thread),
         )
         return
 

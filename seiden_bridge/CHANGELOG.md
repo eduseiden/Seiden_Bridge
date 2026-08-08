@@ -1,3 +1,14 @@
+## 0.15.0 — Home Assistant State Driver
+
+- Adiciona HA State Driver event-driven via WebSocket do Home Assistant.
+- Registra `subscribe_trigger` somente para as entidades configuradas; não utiliza polling.
+- O Home Assistant filtra server-side as entidades não configuradas, reduzindo tráfego e CPU no Bridge.
+- Gera `state_transition` canônico com `connector: home_assistant` e `entity_id`.
+- Ignora mudanças apenas de atributos, lifecycle e `unknown`/`unavailable` por padrão.
+- Reconexão automática com backoff limitado a 60 s.
+- Configuração totalmente opt-in; instalações existentes continuam sem mudança funcional.
+- MQTT State Driver, EVO Direct, EVO Relay, TCA/environment sources e Ingress MQTT permanecem intactos.
+
 ## 0.14.3 — MQTT State Driver Configurator
 
 - Adiciona Web UI via Home Assistant Ingress para configurar o MQTT State Driver.

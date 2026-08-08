@@ -1,9 +1,9 @@
-# Seiden Bridge 0.14.3
+# Seiden Bridge 0.15.0
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.14.3
+## MQTT State Driver — 0.15.0
 
 O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
 
@@ -170,7 +170,7 @@ O Bridge identifica, conecta e normaliza a fonte. A interpretação de faixas e 
 
 ## Configuração visual do MQTT State Driver
 
-A partir da 0.14.3, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
+A partir da 0.15.0, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
 os tópicos do MQTT State Driver sem redigitar a lista `topics`.
 
 1. Cadastre normalmente os tópicos em `mqtt_connections[].topics`.
@@ -183,3 +183,29 @@ A interface só permite selecionar tópicos que já existem em `topics`, garanti
 
 O campo YAML `state_driver_topics` continua suportado por compatibilidade com a 0.14.2,
 mas a Web UI passa a ser a forma recomendada de manutenção.
+
+
+## Home Assistant State Driver — 0.15.0
+
+O Bridge pode observar entidades do Home Assistant sem polling e sem criar MQTT artificial.
+O driver usa WebSocket, registra triggers de estado somente para as entidades explicitamente configuradas,
+fazendo o próprio Home Assistant filtrar eventos irrelevantes antes de chegarem ao Bridge.
+
+Exemplo:
+
+```yaml
+ha_state_driver_enabled: true
+ha_state_driver_entities: |-
+  switch.suite_cama_real_switch
+ha_state_driver_ignore_states: |-
+  unknown
+  unavailable
+```
+
+Uma mudança `off → on` ou `on → off` gera o mesmo `event_type: state_transition` usado
+pelo MQTT State Driver, com `connector: home_assistant` e `entity_id` preservado como
+identidade técnica. Mudanças apenas de atributos, criação/remoção da entidade e transições
+para/de `unknown` ou `unavailable` são ignoradas para evitar ruído e falsas ações.
+
+O driver é totalmente opt-in. Se não estiver configurado, a execução da 0.15.0 permanece
+equivalente à 0.14.3 para MQTT, EVO Direct, EVO Relay e demais fontes.

@@ -1,4 +1,4 @@
-"""Modelo canônico de eventos do Seiden Bridge 0.14.2."""
+"""Modelo canônico de eventos do Seiden Bridge 0.15.0."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -150,6 +150,72 @@ def create_mqtt_state_transition_event(
         "current_state": current_state,
     }
 
+
+
+def create_ha_state_transition_event(
+    *,
+    entity_id: str,
+    previous_state: Any,
+    current_state: Any,
+    friendly_name: str | None = None,
+    ha_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Cria evento canônico compacto para uma mudança real de estado no Home Assistant.
+
+    O Bridge preserva ``entity_id`` como identidade técnica estável. ``friendly_name``
+    é apenas metadado amigável e nunca substitui a identidade da entidade.
+    """
+    timestamp = utc_now()
+    name = str(friendly_name or entity_id)
+    domain = entity_id.split(".", 1)[0] if "." in entity_id else None
+    safe_context = ha_context if isinstance(ha_context, dict) else {}
+    return {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid4()),
+        "event_type": "state_transition",
+        "source": "seiden_bridge",
+        "timestamp": timestamp,
+        "connection": {
+            "id": "home_assistant",
+            "name": "Home Assistant",
+            "type": "home_automation_platform",
+            "connector": "home_assistant",
+            "endpoint": {"host": "supervisor"},
+        },
+        "context": {
+            "interaction_type": "state_change",
+            "direction": None,
+            "ha_context_id": safe_context.get("id"),
+            "ha_parent_id": safe_context.get("parent_id"),
+            "ha_user_id": safe_context.get("user_id"),
+        },
+        "operation": {
+            "action": "state_changed",
+            "field": "state",
+            "channel": None,
+            "previous_state": previous_state,
+            "current_state": current_state,
+        },
+        "device": {
+            "id": entity_id,
+            "name": name,
+            "entity_id": entity_id,
+            "domain": domain,
+        },
+        "connection_id": "home_assistant",
+        "connector": "home_assistant",
+        "entity_id": entity_id,
+        "device_id": entity_id,
+        "device_name": name,
+        "domain": domain,
+        "field": "state",
+        "channel": None,
+        "previous_state": previous_state,
+        "current_state": current_state,
+        "ha_context_id": safe_context.get("id"),
+        "ha_parent_id": safe_context.get("parent_id"),
+        "ha_user_id": safe_context.get("user_id"),
+    }
 
 def create_mqtt_event(
     *,
