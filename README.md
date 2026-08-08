@@ -1,9 +1,9 @@
-# Seiden Bridge 0.15.0
+# Seiden Bridge 0.15.1
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.15.0
+## MQTT State Driver — 0.15.1
 
 O MQTT State Driver transforma payloads MQTT repetitivos em eventos operacionais compactos. Ele mantém apenas o último valor dos campos `state_*` de cada tópico em memória e publica `state_transition` somente quando ocorre uma mudança real.
 
@@ -170,7 +170,7 @@ O Bridge identifica, conecta e normaliza a fonte. A interpretação de faixas e 
 
 ## Configuração visual do MQTT State Driver
 
-A partir da 0.15.0, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
+A partir da 0.15.1, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
 os tópicos do MQTT State Driver sem redigitar a lista `topics`.
 
 1. Cadastre normalmente os tópicos em `mqtt_connections[].topics`.
@@ -185,7 +185,7 @@ O campo YAML `state_driver_topics` continua suportado por compatibilidade com a 
 mas a Web UI passa a ser a forma recomendada de manutenção.
 
 
-## Home Assistant State Driver — 0.15.0
+## Home Assistant State Driver — 0.15.1
 
 O Bridge pode observar entidades do Home Assistant sem polling e sem criar MQTT artificial.
 O driver usa WebSocket, registra triggers de estado somente para as entidades explicitamente configuradas,
@@ -207,5 +207,24 @@ pelo MQTT State Driver, com `connector: home_assistant` e `entity_id` preservado
 identidade técnica. Mudanças apenas de atributos, criação/remoção da entidade e transições
 para/de `unknown` ou `unavailable` são ignoradas para evitar ruído e falsas ações.
 
-O driver é totalmente opt-in. Se não estiver configurado, a execução da 0.15.0 permanece
+O driver é totalmente opt-in. Se não estiver configurado, a execução da 0.15.1 permanece
 equivalente à 0.14.3 para MQTT, EVO Direct, EVO Relay e demais fontes.
+
+
+## HA State Driver — configuração visual
+
+Na 0.15.1, a Web UI do Seiden Bridge passa a listar as entidades diretamente do
+Home Assistant. O operador pode habilitar o HA State Driver, filtrar por domínio
+e selecionar as entidades por checkbox, sem digitar `entity_id` manualmente.
+
+O filtro de domínio usa correspondência por prefixo. Exemplos:
+
+- `light` mostra entidades `light.*`
+- `switch` mostra entidades `switch.*`
+- `binary_` mostra entidades `binary_sensor.*`
+
+Há também busca por nome amigável ou `entity_id`.
+
+A consulta ao Home Assistant ocorre somente ao abrir ou salvar a tela. O HA State
+Driver em execução permanece totalmente orientado a eventos via WebSocket e não
+usa polling.

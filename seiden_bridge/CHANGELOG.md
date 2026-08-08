@@ -1,3 +1,15 @@
+## 0.15.1 — HA State Driver UI
+
+- Integra o HA State Driver à Web UI do Seiden Bridge.
+- Lista entidades diretamente do Home Assistant pela API interna do Supervisor.
+- Adiciona filtro de domínio por prefixo (`light`, `switch`, `binary_`, etc.).
+- Adiciona busca por nome amigável e `entity_id`.
+- Permite selecionar múltiplas entidades por checkbox.
+- Mantém entidades já selecionadas visíveis mesmo se estiverem temporariamente indisponíveis.
+- Bloqueia o salvamento se a lista de entidades do HA não puder ser consultada, evitando apagar configuração válida por falha transitória.
+- Mantém o runtime do HA State Driver event-driven via WebSocket, sem polling.
+- Preserva integralmente MQTT State Driver, EVO Direct, EVO Relay, Environmental Sources e contratos canônicos existentes.
+
 ## 0.15.0 — Home Assistant State Driver
 
 - Adiciona HA State Driver event-driven via WebSocket do Home Assistant.

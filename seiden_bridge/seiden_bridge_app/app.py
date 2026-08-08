@@ -35,7 +35,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.15.0"
+BRIDGE_VERSION = "0.15.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
