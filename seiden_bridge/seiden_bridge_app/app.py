@@ -35,7 +35,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.15.2"
+BRIDGE_VERSION = "0.15.2.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -404,10 +404,25 @@ def _state_driver_extract(
 
 
 def _state_driver_channel(field: str, prefix: str) -> str:
-    """Remove somente o prefixo técnico; não inventa aliases físicos."""
+    """Converte o campo técnico em um canal canônico estável.
+
+    - ``state_l1`` com prefixo ``state_`` -> ``l1``
+    - ``state`` com prefixo ``state_`` -> ``main``
+
+    O campo raiz ``state`` representa naturalmente um device de canal único.
+    """
+    field = str(field or "").strip()
+    prefix = str(prefix or "").strip()
+    root_field = prefix[:-1] if prefix.endswith("_") else prefix
+
     if prefix and field.startswith(prefix):
-        return field[len(prefix):]
-    return field
+        channel = field[len(prefix):].strip()
+        return channel or "main"
+
+    if root_field and field == root_field:
+        return "main"
+
+    return field or "main"
 
 
 def build_connections_from_config(

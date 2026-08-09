@@ -1,3 +1,11 @@
+## 0.15.2.1 — Single-channel MQTT state normalization
+
+- Corrige a normalização do campo raiz `state` de relés MQTT/Zigbee2MQTT.
+- `state` com o prefixo padrão `state_` passa a gerar canal canônico `main`.
+- `state_l1`, `state_l2`, etc. continuam gerando `l1`, `l2`, etc.
+- Mantém baseline silencioso: o primeiro payload após reinício apenas estabelece estado; uma mudança real posterior gera `state_transition`.
+- Preserva EVO Direct, EVO Relay, HA State Driver, Environmental Sources e demais contratos.
+
 ## 0.15.2 — MQTT State Driver relay compatibility and UI polish
 
 - MQTT State Driver passa a aceitar automaticamente o campo raiz `state` quando o prefixo configurado termina com `_` (caso padrão `state_`).

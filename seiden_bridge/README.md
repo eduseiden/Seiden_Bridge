@@ -1,4 +1,12 @@
-# Seiden Bridge 0.15.2
+# Seiden Bridge 0.15.2.1
+
+## MQTT single-channel relay — 0.15.2.1
+
+Relés Zigbee2MQTT de um único canal que publicam `{"state":"ON"}` são normalizados como
+canal canônico `main`. O primeiro payload após reiniciar o Bridge continua sendo apenas
+baseline; para o LCA descobrir o device é necessário ocorrer uma mudança real de estado
+depois que o Bridge estiver em execução.
+
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
