@@ -6,8 +6,8 @@ configuration:
       state_driver_enabled:
         name: Ativar MQTT State Driver
       state_driver_topics:
-        name: Tópicos do State Driver (compatibilidade)
-        description: Mantido para compatibilidade. Prefira Abrir interface web para selecionar os tópicos com checkboxes.
+        name: Tópicos do State Driver (compatibilidade / preview)
+        description: Preenchido automaticamente pela interface web em formato legível. Prefira Abrir interface web para selecionar os tópicos com checkboxes.
       state_driver_field_prefix:
         name: Prefixo de estado
       state_driver_publish_raw:

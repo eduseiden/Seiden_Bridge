@@ -6,8 +6,8 @@ configuration:
       state_driver_enabled:
         name: Enable MQTT State Driver
       state_driver_topics:
-        name: State Driver topics (compatibility)
-        description: Kept for compatibility. Prefer Open Web UI to select topics with checkboxes.
+        name: State Driver topics (compatibility / preview)
+        description: Automatically filled by the Web UI in a readable format. Prefer Open Web UI to select topics with checkboxes.
       state_driver_field_prefix:
         name: State field prefix
       state_driver_publish_raw:

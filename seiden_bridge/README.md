@@ -1,11 +1,11 @@
-# Seiden Bridge 0.15.1
+# Seiden Bridge 0.15.2
 
 Camada de integração do Seiden One. Captura dados de múltiplas origens, normaliza-os no schema canônico 2.0 e publica eventos no Home Assistant.
 
 
-## MQTT State Driver — 0.15.1
+## MQTT State Driver — 0.15.2
 
-A versão 0.15.1 torna a seleção de tópicos do State Driver **explícita e isolada**. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
+A versão 0.15.2 mantém a seleção de tópicos do State Driver **explícita e isolada** e amplia a compatibilidade com relés que publicam apenas `state`. `topics` continua definindo tudo que a conexão MQTT recebe; `state_driver_topics` define somente quais desses tópicos podem gerar `state_transition`.
 
 Isso evita que sensores, fontes TCA, `seiden/lca/interactions` ou qualquer tópico futuro com campos semelhantes sejam interpretados acidentalmente pelo State Driver.
 
@@ -47,7 +47,7 @@ mqtt_connections:
 - mensagens em que apenas `last_seen`, `linkquality` ou outros campos mudaram geram zero eventos de estado.
 
 
-> **Compatibilidade com Home Assistant:** `state_driver_topics` é um campo opcional multilinha. Informe um tópico por linha. Isso permite atualizar instalações antigas sem exigir que a nova opção já exista no YAML salvo pelo Supervisor.
+> **Compatibilidade com Home Assistant:** `state_driver_topics` continua existindo para preservar upgrades e compatibilidade com o Supervisor. A interface web agora o preenche automaticamente em formato legível, com tópicos separados por vírgulas.
 
 Se `state_driver_enabled: true` for usado sem `state_driver_topics`, o driver é desabilitado de forma segura e o comportamento MQTT legado é preservado.
 
@@ -141,7 +141,7 @@ O Bridge identifica, conecta e normaliza a fonte. A interpretação de faixas e 
 
 ## Configuração visual do MQTT State Driver
 
-A partir da 0.15.1, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
+A partir da 0.15.2, o Seiden Bridge oferece uma **Web UI via Ingress** para selecionar
 os tópicos do MQTT State Driver sem redigitar a lista `topics`.
 
 1. Cadastre normalmente os tópicos em `mqtt_connections[].topics`.
@@ -156,7 +156,7 @@ O campo YAML `state_driver_topics` continua suportado por compatibilidade com a 
 mas a Web UI passa a ser a forma recomendada de manutenção.
 
 
-## Home Assistant State Driver — 0.15.1
+## Home Assistant State Driver — 0.15.2
 
 O Bridge pode observar entidades do Home Assistant sem polling e sem criar MQTT artificial.
 O driver usa WebSocket, registra triggers de estado somente para as entidades explicitamente configuradas,
@@ -178,13 +178,13 @@ pelo MQTT State Driver, com `connector: home_assistant` e `entity_id` preservado
 identidade técnica. Mudanças apenas de atributos, criação/remoção da entidade e transições
 para/de `unknown` ou `unavailable` são ignoradas para evitar ruído e falsas ações.
 
-O driver é totalmente opt-in. Se não estiver configurado, a execução da 0.15.1 permanece
+O driver é totalmente opt-in. Se não estiver configurado, a execução da 0.15.2 permanece
 equivalente à 0.14.3 para MQTT, EVO Direct, EVO Relay e demais fontes.
 
 
 ## HA State Driver — configuração visual
 
-Na 0.15.1, a Web UI do Seiden Bridge passa a listar as entidades diretamente do
+Na 0.15.2, a Web UI do Seiden Bridge passa a listar as entidades diretamente do
 Home Assistant. O operador pode habilitar o HA State Driver, filtrar por domínio
 e selecionar as entidades por checkbox, sem digitar `entity_id` manualmente.
 

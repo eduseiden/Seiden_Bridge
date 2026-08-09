@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.15.1
+version: 0.15.2
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação de eventos canônicos
 url: https://github.com/eduseiden/Seiden_Bridge

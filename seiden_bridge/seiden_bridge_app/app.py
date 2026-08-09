@@ -35,7 +35,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt"}
 KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.15.1"
+BRIDGE_VERSION = "0.15.2"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -371,12 +371,19 @@ def _state_driver_extract(
     state_driver: dict[str, Any],
     payload: Any,
 ) -> dict[str, Any]:
-    """Extrai somente os campos operacionais acompanhados pelo driver."""
+    """Extrai somente os campos operacionais acompanhados pelo driver.
+
+    Compatibilidade importante: muitos devices Zigbee publicam canais como
+    ``state_l1``/``state_left`` etc., mas relés simples publicam apenas
+    ``state``. Quando o prefixo configurado termina com ``_`` (caso padrão
+    ``state_``), o campo-raiz sem sufixo também passa a ser aceito.
+    """
     if not isinstance(payload, dict):
         return {}
 
     configured_fields = set(state_driver.get("fields") or [])
     prefix = str(state_driver.get("field_prefix") or "state_")
+    root_field = prefix[:-1] if prefix.endswith("_") else prefix
 
     extracted: dict[str, Any] = {}
     for key, value in payload.items():
@@ -384,8 +391,11 @@ def _state_driver_extract(
         if configured_fields:
             if key_str not in configured_fields:
                 continue
-        elif prefix and not key_str.startswith(prefix):
-            continue
+        elif prefix:
+            matches_prefix = key_str.startswith(prefix)
+            matches_root = bool(root_field) and key_str == root_field
+            if not (matches_prefix or matches_root):
+                continue
 
         if isinstance(value, (str, int, float, bool)) or value is None:
             extracted[key_str] = value

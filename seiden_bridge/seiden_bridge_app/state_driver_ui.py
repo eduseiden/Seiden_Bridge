@@ -214,7 +214,7 @@ def _render_mqtt_sections(options: dict[str, Any]) -> str:
               </div>
 
               <p class="explain">
-                Marque o subconjunto dos tópicos já assinados que deve gerar transições de estado.
+                Marque o subconjunto dos tópicos já assinados que deve gerar transições de estado. O campo de compatibilidade do add-on é preenchido automaticamente em formato legível.
               </p>
 
               <div class="item-list">{''.join(rows)}</div>
@@ -556,7 +556,7 @@ def _apply_mqtt_form(options: dict[str, Any], form: dict[str, list[str]]) -> Non
         ]
 
         conn["state_driver_enabled"] = form.get(f"mqtt_enabled_{index}", ["0"])[0] == "1"
-        conn["state_driver_topics"] = "\n".join(selected)
+        conn["state_driver_topics"] = ", ".join(selected)
 
         prefix = form.get(
             f"mqtt_prefix_{index}",
@@ -599,7 +599,7 @@ def _load_entities_safely() -> tuple[list[dict[str, str]], str]:
 
 
 class StateDriverHandler(BaseHTTPRequestHandler):
-    server_version = "SeidenStateUI/0.15.1"
+    server_version = "SeidenStateUI/0.15.2"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         LOGGER.debug("[STATE UI] " + fmt, *args)

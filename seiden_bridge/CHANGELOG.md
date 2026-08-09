@@ -1,3 +1,12 @@
+## 0.15.2 — MQTT State Driver relay compatibility and UI polish
+
+- MQTT State Driver passa a aceitar automaticamente o campo raiz `state` quando o prefixo configurado termina com `_` (caso padrão `state_`).
+- Relés simples do Zigbee2MQTT, como `ReleCozinhaBancada`, passam a gerar `state_transition` sem exigir troca manual de prefixo.
+- A Web UI do State Driver passa a persistir `state_driver_topics` em formato legível com separação por vírgulas, melhorando a leitura na tela nativa de opções do add-on.
+- Ajusta textos da configuração para deixar claro que `state_driver_topics` é um preview de compatibilidade mantido automaticamente.
+- Atualiza README da raiz, README do add-on e identificadores de versão para 0.15.2.
+- Preserva integralmente EVO Direct, EVO Relay, Environmental Sources, HA State Driver e contratos canônicos existentes.
+
 ## 0.15.1 — HA State Driver UI
 
 - Integra o HA State Driver à Web UI do Seiden Bridge.
