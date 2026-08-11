@@ -1,4 +1,13 @@
-# Seiden Bridge 0.16.0
+# Seiden Bridge 0.16.1
+
+
+## Redfish Multi-System — 0.16.1
+
+- Descoberta agnóstica de todos os membros de `/redfish/v1/Systems`.
+- Associação de cada System aos seus Chassis por links Redfish, com fallback seguro.
+- Publicação de um `infrastructure.telemetry_snapshot` independente por servidor a cada ciclo.
+- Mantida compatibilidade com endpoints Redfish de um único System.
+- Nenhuma dependência de fabricante ou de IDs específicos de servidor.
 
 ## Redfish Connector — 0.16.0
 

@@ -36,7 +36,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt", "redfish"}
 KNOWN_DRIVERS = {"evo", "mqtt", "redfish", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.16.0"
+BRIDGE_VERSION = "0.16.1"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -1638,7 +1638,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.16.0. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.16.1. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT/Redfish."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -2176,17 +2176,26 @@ def start_redfish_polling(
                     command="snapshot",
                     request_timeout=request_timeout,
                 )
-                payload = create_redfish_telemetry_event(
-                    connection=connection,
-                    asset=data.get("asset") or {},
-                    sensors=data.get("sensors") or [],
-                )
-                fire_event_names(
-                    supervisor_token=supervisor_token,
-                    event_names=[bridge_event],
-                    payload=payload,
-                    request_timeout=request_timeout,
-                )
+                snapshots = data.get("snapshots") or [
+                    {
+                        "asset": data.get("asset") or {},
+                        "sensors": data.get("sensors") or [],
+                    }
+                ]
+                published_payloads = []
+                for snapshot in snapshots:
+                    payload = create_redfish_telemetry_event(
+                        connection=connection,
+                        asset=snapshot.get("asset") or {},
+                        sensors=snapshot.get("sensors") or [],
+                    )
+                    fire_event_names(
+                        supervisor_token=supervisor_token,
+                        event_names=[bridge_event],
+                        payload=payload,
+                        request_timeout=request_timeout,
+                    )
+                    published_payloads.append(payload)
                 if was_online is not True:
                     fire_event_names(
                         supervisor_token=supervisor_token,
@@ -2203,16 +2212,18 @@ def start_redfish_polling(
                     )
                     LOGGER.info("[REDFISH][%s] Conexão online.", connection["name"])
                 was_online = True
-                readings = {
-                    item.get("id"): item.get("reading")
-                    for item in payload.get("measurements", [])
-                }
-                LOGGER.info(
-                    "[REDFISH][%s] Snapshot publicado | sensores=%d | %s",
-                    connection["name"],
-                    len(payload.get("measurements", [])),
-                    ", ".join(f"{key}={value}" for key, value in readings.items()),
-                )
+                for payload in published_payloads:
+                    readings = {
+                        item.get("id"): item.get("reading")
+                        for item in payload.get("measurements", [])
+                    }
+                    LOGGER.info(
+                        "[REDFISH][%s][%s] Snapshot publicado | sensores=%d | %s",
+                        connection["name"],
+                        payload.get("system_id") or "system",
+                        len(payload.get("measurements", [])),
+                        ", ".join(f"{key}={value}" for key, value in readings.items()),
+                    )
             except Exception as error:
                 if was_online is not False:
                     fire_event_names(

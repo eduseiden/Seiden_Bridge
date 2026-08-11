@@ -23,13 +23,18 @@ DEFAULT_SENSOR_IDS = (
 
 
 class RedfishConnector(BaseConnector):
-    """Lê sensores Redfish diretamente, sem depender do Home Assistant."""
+    """Lê sensores Redfish diretamente, sem depender do Home Assistant.
+
+    A descoberta é multi-system e agnóstica de fabricante. Cada membro da
+    coleção ``Systems`` é tratado como um ativo independente e associado aos
+    chassis anunciados pelo próprio System. Quando o vínculo não está no
+    System, o conector tenta inferi-lo a partir de ``Chassis/Links``.
+    """
 
     connector_id = "redfish"
 
     def __init__(self) -> None:
-        self._sensor_paths: dict[str, list[str]] = {}
-        self._asset_meta: dict[str, dict[str, Any]] = {}
+        self._assets: dict[str, list[dict[str, Any]]] = {}
 
     @staticmethod
     def _base_url(connection: dict[str, Any]) -> str:
@@ -83,16 +88,40 @@ class RedfishConnector(BaseConnector):
         return paths
 
     @staticmethod
+    def _link_paths(value: Any) -> list[str]:
+        """Extrai ``@odata.id`` de um link Redfish unitário ou coleção."""
+        if isinstance(value, dict):
+            if value.get("@odata.id"):
+                return [str(value["@odata.id"])]
+            return []
+        if isinstance(value, list):
+            paths: list[str] = []
+            for item in value:
+                if isinstance(item, dict) and item.get("@odata.id"):
+                    paths.append(str(item["@odata.id"]))
+            return paths
+        return []
+
+    @staticmethod
     def _selected_sensor_ids(connection: dict[str, Any]) -> set[str]:
         configured = connection.get("sensor_ids")
         if isinstance(configured, str):
-            items = [part.strip() for part in configured.replace(";", "\n").replace(",", "\n").splitlines()]
+            items = [
+                part.strip()
+                for part in configured.replace(";", "\n").replace(",", "\n").splitlines()
+            ]
             selected = {item for item in items if item}
             return selected or set(DEFAULT_SENSOR_IDS)
         if isinstance(configured, list):
             selected = {str(item).strip() for item in configured if str(item).strip()}
             return selected or set(DEFAULT_SENSOR_IDS)
         return set(DEFAULT_SENSOR_IDS)
+
+    @staticmethod
+    def _system_identity(system: dict[str, Any], system_path: str) -> tuple[str, str]:
+        system_id = str(system.get("Id") or system_path.rstrip("/").split("/")[-1])
+        system_name = str(system.get("Name") or system.get("HostName") or system_id)
+        return system_id, system_name
 
     def _discover(
         self,
@@ -101,56 +130,109 @@ class RedfishConnector(BaseConnector):
         base_url: str,
         timeout: int,
         verify_tls: bool,
-    ) -> tuple[list[str], dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         root = self._get_json(session, base_url, "/redfish/v1/", timeout, verify_tls)
         systems_path = ((root.get("Systems") or {}).get("@odata.id"))
         chassis_path = ((root.get("Chassis") or {}).get("@odata.id"))
+        if not systems_path:
+            raise RuntimeError("Service Root Redfish não expõe coleção Systems")
         if not chassis_path:
             raise RuntimeError("Service Root Redfish não expõe coleção Chassis")
 
-        system_id = None
-        system_name = None
-        if systems_path:
-            systems = self._get_json(session, base_url, systems_path, timeout, verify_tls)
-            system_members = self._member_paths(systems)
-            if system_members:
-                system = self._get_json(session, base_url, system_members[0], timeout, verify_tls)
-                system_id = system.get("Id") or system_members[0].rstrip("/").split("/")[-1]
-                system_name = system.get("Name") or system.get("HostName") or system_id
+        systems = self._get_json(session, base_url, systems_path, timeout, verify_tls)
+        system_members = self._member_paths(systems)
+        if not system_members:
+            raise RuntimeError("Nenhum System encontrado no endpoint Redfish")
 
-        chassis = self._get_json(session, base_url, chassis_path, timeout, verify_tls)
-        chassis_members = self._member_paths(chassis)
-        if not chassis_members:
-            raise RuntimeError("Nenhum chassis encontrado no endpoint Redfish")
+        chassis_collection = self._get_json(session, base_url, chassis_path, timeout, verify_tls)
+        chassis_members = self._member_paths(chassis_collection)
+        chassis_objects: dict[str, dict[str, Any]] = {}
+        for chassis_member in chassis_members:
+            chassis_objects[chassis_member] = self._get_json(
+                session, base_url, chassis_member, timeout, verify_tls
+            )
 
         selected_ids = self._selected_sensor_ids(connection)
-        sensor_paths: list[str] = []
-        chassis_ids: list[str] = []
-        for chassis_member in chassis_members:
-            chassis_obj = self._get_json(session, base_url, chassis_member, timeout, verify_tls)
-            chassis_id = str(chassis_obj.get("Id") or chassis_member.rstrip("/").split("/")[-1])
-            chassis_ids.append(chassis_id)
-            sensors_path = ((chassis_obj.get("Sensors") or {}).get("@odata.id"))
-            if not sensors_path:
-                continue
-            sensors = self._get_json(session, base_url, sensors_path, timeout, verify_tls)
-            for sensor_path in self._member_paths(sensors):
-                sensor_id = sensor_path.rstrip("/").split("/")[-1]
-                if sensor_id in selected_ids:
-                    sensor_paths.append(sensor_path)
+        assets: list[dict[str, Any]] = []
 
-        if not sensor_paths:
+        for system_path in system_members:
+            system = self._get_json(session, base_url, system_path, timeout, verify_tls)
+            system_id, system_name = self._system_identity(system, system_path)
+
+            # Preferência: vínculo declarado pelo próprio ComputerSystem.
+            links = system.get("Links") if isinstance(system.get("Links"), dict) else {}
+            linked_chassis = self._link_paths(links.get("Chassis"))
+
+            # Fallback agnóstico: procurar chassis cujo Links.ComputerSystems
+            # contenha o System atual. Alguns fabricantes modelam só esse lado.
+            if not linked_chassis:
+                for candidate_path, candidate in chassis_objects.items():
+                    candidate_links = (
+                        candidate.get("Links")
+                        if isinstance(candidate.get("Links"), dict)
+                        else {}
+                    )
+                    computer_systems = self._link_paths(candidate_links.get("ComputerSystems"))
+                    if system_path in computer_systems:
+                        linked_chassis.append(candidate_path)
+
+            # Último fallback para implementações simples com exatamente um
+            # System e um Chassis. Nunca associa todos os chassis a todos os
+            # sistemas em ambientes multi-system.
+            if not linked_chassis and len(system_members) == 1 and len(chassis_members) == 1:
+                linked_chassis = list(chassis_members)
+
+            sensor_paths: list[str] = []
+            chassis_ids: list[str] = []
+
+            for chassis_member in linked_chassis:
+                chassis_obj = chassis_objects.get(chassis_member)
+                if chassis_obj is None:
+                    chassis_obj = self._get_json(
+                        session, base_url, chassis_member, timeout, verify_tls
+                    )
+                    chassis_objects[chassis_member] = chassis_obj
+
+                chassis_id = str(
+                    chassis_obj.get("Id") or chassis_member.rstrip("/").split("/")[-1]
+                )
+                chassis_ids.append(chassis_id)
+
+                sensors_path = ((chassis_obj.get("Sensors") or {}).get("@odata.id"))
+                if not sensors_path:
+                    continue
+                sensors = self._get_json(session, base_url, sensors_path, timeout, verify_tls)
+                for sensor_path in self._member_paths(sensors):
+                    sensor_id = sensor_path.rstrip("/").split("/")[-1]
+                    if sensor_id in selected_ids:
+                        sensor_paths.append(sensor_path)
+
+            if not sensor_paths:
+                LOGGER.warning(
+                    "[REDFISH][%s] System %s ignorado: nenhum sensor selecionado encontrado.",
+                    connection.get("name", connection.get("id", "redfish")),
+                    system_id,
+                )
+                continue
+
+            assets.append(
+                {
+                    "meta": {
+                        "system_id": system_id,
+                        "system_name": system_name,
+                        "chassis_ids": chassis_ids,
+                    },
+                    "sensor_paths": sensor_paths,
+                }
+            )
+
+        if not assets:
             raise RuntimeError(
-                "Nenhum dos sensores Redfish configurados foi encontrado: "
+                "Nenhum System Redfish com sensores configurados foi encontrado: "
                 + ", ".join(sorted(selected_ids))
             )
 
-        meta = {
-            "system_id": system_id,
-            "system_name": system_name,
-            "chassis_ids": chassis_ids,
-        }
-        return sensor_paths, meta
+        return assets
 
     @staticmethod
     def _normalize_sensor(sensor: dict[str, Any]) -> dict[str, Any]:
@@ -203,38 +285,42 @@ class RedfishConnector(BaseConnector):
         session = self._session(connection)
         verify_tls = self._verify_tls(connection)
 
-        sensor_paths = self._sensor_paths.get(connection_id)
-        meta = self._asset_meta.get(connection_id)
-        if not sensor_paths or meta is None:
-            sensor_paths, meta = self._discover(
+        assets = self._assets.get(connection_id)
+        if not assets:
+            assets = self._discover(
                 connection, session, base_url, request_timeout, verify_tls
             )
-            self._sensor_paths[connection_id] = sensor_paths
-            self._asset_meta[connection_id] = meta
+            self._assets[connection_id] = assets
             LOGGER.info(
-                "[REDFISH][%s] Descobertos %d sensores selecionados (%s)",
+                "[REDFISH][%s] Descobertos %d Systems com %d sensores selecionados.",
                 connection.get("name", connection_id),
-                len(sensor_paths),
-                ", ".join(path.rstrip("/").split("/")[-1] for path in sensor_paths),
+                len(assets),
+                sum(len(item["sensor_paths"]) for item in assets),
             )
 
-        sensors: list[dict[str, Any]] = []
+        snapshots: list[dict[str, Any]] = []
         try:
-            for sensor_path in sensor_paths:
-                sensor = self._get_json(
-                    session, base_url, sensor_path, request_timeout, verify_tls
-                )
-                sensors.append(self._normalize_sensor(sensor))
+            for asset in assets:
+                sensors: list[dict[str, Any]] = []
+                for sensor_path in asset["sensor_paths"]:
+                    sensor = self._get_json(
+                        session, base_url, sensor_path, request_timeout, verify_tls
+                    )
+                    sensors.append(self._normalize_sensor(sensor))
+                snapshots.append({"asset": asset["meta"], "sensors": sensors})
         except requests.HTTPError as error:
             # Pode ter ocorrido mudança de inventário após reboot/troca de hardware.
             if error.response is not None and error.response.status_code == 404:
-                self._sensor_paths.pop(connection_id, None)
-                self._asset_meta.pop(connection_id, None)
+                self._assets.pop(connection_id, None)
             raise
 
+        # Campos asset/sensors são mantidos para compatibilidade com qualquer
+        # consumidor interno antigo; multi-system usa ``snapshots``.
+        first = snapshots[0] if snapshots else {"asset": {}, "sensors": []}
         return {
             "result": True,
-            "asset": meta,
-            "sensors": sensors,
+            "asset": first["asset"],
+            "sensors": first["sensors"],
+            "snapshots": snapshots,
             "base_url": base_url.rstrip("/"),
         }

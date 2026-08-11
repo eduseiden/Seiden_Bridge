@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.1 — Redfish Multi-System
+
+- Conector Redfish passa a descobrir todos os `ComputerSystem` disponíveis.
+- Associação System ↔ Chassis baseada em links semânticos do Redfish, sem dependência de fabricante.
+- Um snapshot canônico é publicado por servidor a cada ciclo de polling.
+- Inventário Redfish é redescoberto automaticamente após respostas 404.
+- Compatibilidade preservada para instalações Redfish single-system.
+
+
 ## 0.16.0 — Redfish Connector
 
 - Adiciona conector `redfish` direto no Seiden Bridge.
