@@ -1,4 +1,40 @@
-# Seiden Bridge 0.15.2.1
+# Seiden Bridge 0.16.0
+
+## Redfish Connector — 0.16.0
+
+Adiciona coleta direta de telemetria de infraestrutura via Redfish, sem passar por entidades do Home Assistant.
+O Bridge descobre `Systems`, `Chassis` e `Sensors`, normaliza um snapshot canônico e publica em `seiden_bridge_event`.
+
+Primeiro perfil de laboratório:
+
+```yaml
+connections:
+  - id: redfish_lab
+    name: Redfish Lab
+    connector: redfish
+    enabled: true
+    poll_interval: 30
+    sensor_ids: |-
+      CPU1Temp
+      IntakeTemp
+      ExhaustTemp
+      AmbientTemp
+      CPUFan1
+      CPUFan2
+      TotalPower
+    endpoint:
+      host: cast.local
+      port: 8000
+      scheme: http
+      path: /redfish/v1
+      verify_tls: false
+    context:
+      interaction_type: telemetry
+      direction: none
+```
+
+Se `sensor_ids` for omitido, o mesmo conjunto inicial é usado como padrão. Em servidores reais, `username` e `password` podem ser informados na conexão e HTTPS/TLS permanece o padrão recomendado.
+
 
 ## MQTT single-channel relay — 0.15.2.1
 

@@ -21,6 +21,7 @@ from .events import (
     create_mqtt_event,
     create_mqtt_state_transition_event,
     create_ha_state_transition_event,
+    create_redfish_telemetry_event,
 )
 
 
@@ -31,11 +32,11 @@ DEFAULT_POLL_INTERVAL = 2
 DEFAULT_REQUEST_TIMEOUT = 5
 DEFAULT_MAX_RETRY_INTERVAL = 300
 DEFAULT_LOG_LEVEL = "INFO"
-SUPPORTED_DRIVERS = {"evo", "mqtt"}
-KNOWN_DRIVERS = {"evo", "mqtt", "control_id", "hikvision", "intelbras"}
+SUPPORTED_DRIVERS = {"evo", "mqtt", "redfish"}
+KNOWN_DRIVERS = {"evo", "mqtt", "redfish", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.15.2.1"
+BRIDGE_VERSION = "0.16.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -145,7 +146,7 @@ def normalize_connection(connection: dict[str, Any]) -> dict[str, Any]:
     context = connection.get("context") or {}
     connector = str(connection.get("connector", connection.get("driver", "evo"))).strip().lower()
     host = str(endpoint.get("host", connection.get("ip", ""))).strip()
-    default_interaction = "message" if connector == "mqtt" else "passage"
+    default_interaction = "message" if connector == "mqtt" else ("telemetry" if connector == "redfish" else "passage")
     interaction_type = str(context.get("interaction_type", connection.get("interaction_type", default_interaction))).strip().lower()
     direction = context.get("direction", connection.get("direction"))
     if direction in ("none", "", None):
@@ -1637,8 +1638,8 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.9.0. "
-                "Mantenha a conexão desativada ou selecione EVO/MQTT."
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.16.0. "
+                "Mantenha a conexão desativada ou selecione EVO/MQTT/Redfish."
             )
         if not isinstance(connection.get("enabled", True), bool):
             raise RuntimeError(f"Valor enabled inválido na conexão {connection['name']}")
@@ -1653,6 +1654,16 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
                 qos = int(subscription.get("qos", 0))
                 if qos not in (0, 1, 2):
                     raise RuntimeError(f"QoS inválido em {connection['name']}: {qos}")
+            continue
+
+        if connector == "redfish":
+            endpoint = connection.get("endpoint") or {}
+            scheme = str(endpoint.get("scheme") or "https").lower()
+            if scheme not in ("http", "https"):
+                raise RuntimeError(f"Scheme Redfish inválido em {connection['name']}: {scheme}")
+            interval = int(connection.get("poll_interval", 30))
+            if interval < 5:
+                raise RuntimeError(f"poll_interval Redfish deve ser >= 5s em {connection['name']}")
             continue
 
         if not str(connection.get("password", "")).strip():
@@ -2141,6 +2152,97 @@ def run_polling_loop(
         time.sleep(sleep_time)
 
 
+
+def start_redfish_polling(
+    *,
+    connection: dict[str, Any],
+    supervisor_token: str,
+    bridge_event: str,
+    online_event: str,
+    offline_event: str,
+    request_timeout: int,
+) -> threading.Thread:
+    """Inicia polling Redfish independente do loop legado EVO."""
+    connector = get_connector("redfish")
+    interval = max(5, int(connection.get("poll_interval", 30)))
+
+    def worker() -> None:
+        was_online: bool | None = None
+        while True:
+            started = time.monotonic()
+            try:
+                data = connector.execute(
+                    connection=connection,
+                    command="snapshot",
+                    request_timeout=request_timeout,
+                )
+                payload = create_redfish_telemetry_event(
+                    connection=connection,
+                    asset=data.get("asset") or {},
+                    sensors=data.get("sensors") or [],
+                )
+                fire_event_names(
+                    supervisor_token=supervisor_token,
+                    event_names=[bridge_event],
+                    payload=payload,
+                    request_timeout=request_timeout,
+                )
+                if was_online is not True:
+                    fire_event_names(
+                        supervisor_token=supervisor_token,
+                        event_names=[online_event],
+                        payload={
+                            "source": "seiden_bridge",
+                            "connector": "redfish",
+                            "connection_id": connection["id"],
+                            "connection_name": connection["name"],
+                            "status": "online",
+                            "timestamp": now_iso(),
+                        },
+                        request_timeout=request_timeout,
+                    )
+                    LOGGER.info("[REDFISH][%s] Conexão online.", connection["name"])
+                was_online = True
+                readings = {
+                    item.get("id"): item.get("reading")
+                    for item in payload.get("measurements", [])
+                }
+                LOGGER.info(
+                    "[REDFISH][%s] Snapshot publicado | sensores=%d | %s",
+                    connection["name"],
+                    len(payload.get("measurements", [])),
+                    ", ".join(f"{key}={value}" for key, value in readings.items()),
+                )
+            except Exception as error:
+                if was_online is not False:
+                    fire_event_names(
+                        supervisor_token=supervisor_token,
+                        event_names=[offline_event],
+                        payload={
+                            "source": "seiden_bridge",
+                            "connector": "redfish",
+                            "connection_id": connection["id"],
+                            "connection_name": connection["name"],
+                            "status": "offline",
+                            "error": str(error),
+                            "timestamp": now_iso(),
+                        },
+                        request_timeout=request_timeout,
+                    )
+                was_online = False
+                LOGGER.warning("[REDFISH][%s] Falha no polling: %s", connection["name"], error)
+
+            elapsed = time.monotonic() - started
+            time.sleep(max(0.2, interval - elapsed))
+
+    thread = threading.Thread(
+        target=worker,
+        name=f"seiden-redfish-{connection['id']}",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
 def main() -> None:
     """Inicializa e executa o Seiden Bridge."""
     config = load_config()
@@ -2251,6 +2353,19 @@ def main() -> None:
 
     polling_readers = [item for item in active_readers if item.get("connector") == "evo"]
     mqtt_connections = [item for item in active_readers if item.get("connector") == "mqtt"]
+    redfish_connections = [item for item in active_readers if item.get("connector") == "redfish"]
+
+    redfish_threads = [
+        start_redfish_polling(
+            connection=connection,
+            supervisor_token=supervisor_token,
+            bridge_event=bridge_event,
+            online_event=connection_online_event,
+            offline_event=connection_offline_event,
+            request_timeout=request_timeout,
+        )
+        for connection in redfish_connections
+    ]
 
     mqtt_clients = []
     mqtt_state_cache: dict[tuple[str, str], dict[str, Any]] = {}
@@ -2455,11 +2570,12 @@ def main() -> None:
     )
 
     if not polling_readers:
-        if mqtt_connections or evo_relays or ha_state_thread:
+        if mqtt_connections or evo_relays or redfish_connections or ha_state_thread:
             LOGGER.info(
-                "Bridge operando somente com streaming: MQTT=%d EVO Relay=%d HA State=%d",
+                "Bridge sem EVO Direct: MQTT=%d EVO Relay=%d Redfish=%d HA State=%d",
                 len(mqtt_connections),
                 len(evo_relays),
+                len(redfish_connections),
                 1 if ha_state_thread else 0,
             )
         wait_without_active_readers(
@@ -2468,7 +2584,7 @@ def main() -> None:
             request_timeout=request_timeout,
             publish_last_photo=publish_last_photo,
             photo_max_size_mb=photo_max_size_mb,
-            streaming_active=bool(mqtt_connections or evo_relays or ha_state_thread),
+            streaming_active=bool(mqtt_connections or evo_relays or redfish_connections or ha_state_thread),
         )
         return
 

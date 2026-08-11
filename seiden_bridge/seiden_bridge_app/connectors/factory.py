@@ -3,7 +3,8 @@ from typing import Any
 from .base import BaseConnector
 from .evo import EvoConnector
 from .mqtt import MqttConnector
-_CONNECTORS: dict[str, BaseConnector] = {"evo": EvoConnector(), "mqtt": MqttConnector()}
+from .redfish import RedfishConnector
+_CONNECTORS: dict[str, BaseConnector] = {"evo": EvoConnector(), "mqtt": MqttConnector(), "redfish": RedfishConnector()}
 
 def get_connector(connector_id: str) -> BaseConnector:
     normalized = str(connector_id or "evo").strip().lower()

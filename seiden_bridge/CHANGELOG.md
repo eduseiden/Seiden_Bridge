@@ -1,3 +1,16 @@
+# Changelog
+
+## 0.16.0 — Redfish Connector
+
+- Adiciona conector `redfish` direto no Seiden Bridge.
+- Descobre `Systems`, `Chassis` e `Sensors` via Redfish.
+- Coleta por padrão CPU, intake, exhaust, ambiente, fans e potência total.
+- Preserva `PhysicalContext`, unidade, health/state, faixa de leitura, thresholds e itens relacionados.
+- Publica um `infrastructure.telemetry_snapshot` canônico por ciclo, reduzindo volume de eventos.
+- Adiciona polling Redfish independente do loop EVO, com intervalo por conexão (mínimo 5 s; padrão 30 s).
+- Suporta HTTP para laboratório e HTTPS com autenticação/TLS para servidores reais.
+- Não altera EVO Direct, EVO Relay, MQTT, Environmental Sources, State Drivers ou LCA.
+
 ## 0.15.2.1 — Single-channel MQTT state normalization
 
 - Corrige a normalização do campo raiz `state` de relés MQTT/Zigbee2MQTT.

@@ -217,6 +217,51 @@ def create_ha_state_transition_event(
         "ha_user_id": safe_context.get("user_id"),
     }
 
+
+def create_redfish_telemetry_event(
+    *,
+    connection: dict[str, Any],
+    asset: dict[str, Any],
+    sensors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Cria snapshot canônico de telemetria Redfish."""
+    timestamp = utc_now()
+    endpoint = connection.get("endpoint") or {}
+    host = endpoint.get("host") or connection.get("host")
+    port = endpoint.get("port")
+    scheme = endpoint.get("scheme") or "https"
+    context = connection.get("context") or {}
+    return {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid4()),
+        "event_type": "infrastructure.telemetry_snapshot",
+        "source": "seiden_bridge",
+        "timestamp": timestamp,
+        "connection": {
+            "id": connection["id"],
+            "name": connection["name"],
+            "type": "infrastructure_management",
+            "connector": "redfish",
+            "endpoint": {"host": host, "port": port, "scheme": scheme},
+        },
+        "context": {
+            **context,
+            "interaction_type": "telemetry",
+            "direction": None,
+        },
+        "asset": {
+            "system_id": asset.get("system_id"),
+            "system_name": asset.get("system_name"),
+            "chassis_ids": asset.get("chassis_ids") or [],
+        },
+        "measurements": sensors,
+        "connection_id": connection["id"],
+        "connector": "redfish",
+        "system_id": asset.get("system_id"),
+        "system_name": asset.get("system_name"),
+        "sensors": sensors,
+    }
+
 def create_mqtt_event(
     *,
     connection: dict[str, Any],
