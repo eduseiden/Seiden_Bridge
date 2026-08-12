@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.17.0 — Linux SSH Connector
+
+- Adiciona conector `linux` agentless via SSH.
+- Autenticação por chave privada (`key_path`) ou senha, com preferência por chave.
+- Suporte opcional a validação explícita de host key por `host_key_fingerprint` SHA256.
+- Coleta load 1/5/15, memória, swap, disco, uptime, processos e tráfego acumulado de rede.
+- Publica `infrastructure.telemetry_snapshot` no schema canônico 2.0.
+- Expõe `telemetry_profile: linux_system` e capabilities do ativo; temperatura não é inventada quando indisponível.
+- Polling independente, padrão de 60 s e mínimo de 10 s.
+- Preserva integralmente EVO Direct, EVO Relay, MQTT, HA State Driver e Redfish Multi-System.
+
 ## 0.16.1 — Redfish Multi-System
 
 - Conector Redfish passa a descobrir todos os `ComputerSystem` disponíveis.

@@ -599,7 +599,7 @@ def _load_entities_safely() -> tuple[list[dict[str, str]], str]:
 
 
 class StateDriverHandler(BaseHTTPRequestHandler):
-    server_version = "SeidenStateUI/0.16.1"
+    server_version = "SeidenStateUI/0.17.0"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         LOGGER.debug("[STATE UI] " + fmt, *args)

@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.16.1
+version: 0.17.0
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação de eventos canônicos
 url: https://github.com/eduseiden/Seiden_Bridge
@@ -57,16 +57,19 @@ schema:
   connections:
   - id: str
     name: str
-    connector: list(evo|redfish|control_id|hikvision|intelbras)
+    connector: list(evo|redfish|linux|control_id|hikvision|intelbras)
     enabled: bool
     username: str?
     password: password?
     poll_interval: int?
     sensor_ids: str?
+    key_path: str?
+    host_key_fingerprint: str?
+    mountpoint: str?
     endpoint:
       host: str
       port: port?
-      scheme: list(http|https)
+      scheme: list(http|https|ssh)
       path: str
       verify_tls: bool?
     context:

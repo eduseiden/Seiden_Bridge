@@ -262,6 +262,48 @@ def create_redfish_telemetry_event(
         "sensors": sensors,
     }
 
+
+def create_linux_telemetry_event(
+    *,
+    connection: dict[str, Any],
+    asset: dict[str, Any],
+    measurements: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Cria snapshot canônico de telemetria de sistema Linux."""
+    timestamp = utc_now()
+    endpoint = connection.get("endpoint") or {}
+    host = endpoint.get("host") or connection.get("host")
+    port = endpoint.get("port") or 22
+    context = connection.get("context") or {}
+    return {
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": str(uuid4()),
+        "event_type": "infrastructure.telemetry_snapshot",
+        "source": "seiden_bridge",
+        "timestamp": timestamp,
+        "connection": {
+            "id": connection["id"],
+            "name": connection["name"],
+            "type": "operating_system",
+            "connector": "linux",
+            "endpoint": {"host": host, "port": port, "scheme": "ssh"},
+        },
+        "context": {
+            **context,
+            "interaction_type": "telemetry",
+            "direction": None,
+            "telemetry_domain": "compute",
+        },
+        "asset": asset,
+        "measurements": measurements,
+        "connection_id": connection["id"],
+        "connector": "linux",
+        "system_id": asset.get("system_id"),
+        "system_name": asset.get("system_name"),
+        "telemetry_profile": "linux_system",
+        "sensors": measurements,
+    }
+
 def create_mqtt_event(
     *,
     connection: dict[str, Any],

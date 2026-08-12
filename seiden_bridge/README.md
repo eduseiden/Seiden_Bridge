@@ -1,4 +1,33 @@
-# Seiden Bridge 0.16.1
+# Seiden Bridge 0.17.0
+
+## Linux SSH Connector — 0.17.0
+
+Adiciona coleta **agentless** de telemetria de servidores Linux via SSH, usando chave privada ou senha. O conector publica `infrastructure.telemetry_snapshot` no mesmo schema canônico 2.0 usado pela infraestrutura, sem depender de Home Assistant no servidor monitorado.
+
+Métricas iniciais: load average 1/5/15 min, memória usada/disponível, swap, disco, uptime, processos e bytes de rede. Em VMs/VPSs que não expõem sensores físicos, a capability `thermal` é publicada como `false` em vez de inventar temperatura.
+
+Exemplo para a VPS de laboratório:
+
+```yaml
+connections:
+  - id: linux_vps
+    name: Ubuntu VPS
+    connector: linux
+    enabled: true
+    username: seiden-monitor
+    key_path: /config/seiden_linux_monitor
+    poll_interval: 60
+    endpoint:
+      host: 206.189.112.7
+      port: 22
+      scheme: ssh
+      path: /
+    context:
+      interaction_type: telemetry
+      direction: none
+```
+
+Para produção, recomenda-se configurar também `host_key_fingerprint` no formato `SHA256:...`, mantendo autenticação por chave e usuário sem privilégios.
 
 
 ## Redfish Multi-System — 0.16.1
