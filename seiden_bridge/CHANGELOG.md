@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.0 — Cloud Upstream + Store-and-Forward
+
+- Adiciona saída HTTPS upstream independente da publicação local no Home Assistant.
+- Mantém `local_output_enabled: true` por padrão, preservando integralmente instalações 0.17.0.
+- Adiciona autenticação Bearer, TLS configurável e timeout dedicado.
+- Implementa fila persistente SQLite em `/data/seiden_bridge_upstream.db`.
+- Implementa retry exponencial com limites configuráveis, retenção temporal e limite de tamanho da fila.
+- Encaminha o payload canônico original sem alterar o schema 2.0, permitindo transportar Environmental Sources (EEA/TCA), eventos MQTT/LCA, State Driver, EVO e telemetria.
+- Saídas local e cloud são desacopladas: falha no upstream não interrompe automação/coleta local e falha na publicação HA não impede o store-and-forward.
+- Configuração cloud é opt-in; `upstream_enabled: false` mantém o comportamento anterior.
+- Preserva EVO Direct, EVO Relay, MQTT, Environmental Sources, MQTT State Driver, HA State Driver, Redfish Multi-System e Linux SSH.
+
 ## 0.17.0 — Linux SSH Connector
 
 - Adiciona conector `linux` agentless via SSH.

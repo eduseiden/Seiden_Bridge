@@ -16,6 +16,7 @@ import requests
 from .connectors import execute_connection_command, get_connector
 from .connectors.evo_relay import EvoRelayConnector
 from .ha_state_driver import start_ha_state_driver
+from .upstream import UpstreamClient
 from .events import (
     create_presence_event,
     create_mqtt_event,
@@ -37,7 +38,7 @@ SUPPORTED_DRIVERS = {"evo", "mqtt", "redfish", "linux"}
 KNOWN_DRIVERS = {"evo", "mqtt", "redfish", "linux", "control_id", "hikvision", "intelbras"}
 from seiden_bridge_app.state_driver_ui import start_state_driver_ui
 
-BRIDGE_VERSION = "0.17.0"
+BRIDGE_VERSION = "0.18.0"
 
 LAST_PHOTO_DIR = Path("/config/www/seiden_bridge")
 LAST_PHOTO_PATH = LAST_PHOTO_DIR / "latest.jpg"
@@ -51,6 +52,9 @@ DEFAULT_CONNECTION_ONLINE_EVENT = "seiden_connection_online"
 IDLE_SLEEP_SECONDS = 60
 
 STATE_LOCK = threading.RLock()
+
+UPSTREAM_CLIENT: UpstreamClient | None = None
+LOCAL_OUTPUT_ENABLED = True
 
 LOGGER = logging.getLogger("seiden_bridge")
 
@@ -915,20 +919,33 @@ def fire_event_names(
     payload: dict[str, Any],
     request_timeout: int,
 ) -> bool:
-    """Publica o mesmo payload em nomes únicos, preservando aliases legados."""
+    """Distribui um evento canônico para as saídas habilitadas.
+
+    A saída Home Assistant preserva integralmente o comportamento legado.
+    O upstream HTTPS é independente: uma falha local não impede fila cloud e
+    uma indisponibilidade cloud não interrompe o processamento local.
+    """
     sent = False
     seen: set[str] = set()
-    for event_name in event_names:
-        normalized = str(event_name or "").strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        sent = safe_fire_ha_event(
-            supervisor_token=supervisor_token,
-            event_type=normalized,
-            payload=payload,
-            request_timeout=request_timeout,
-        ) or sent
+    if LOCAL_OUTPUT_ENABLED:
+        for event_name in event_names:
+            normalized = str(event_name or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            sent = safe_fire_ha_event(
+                supervisor_token=supervisor_token,
+                event_type=normalized,
+                payload=payload,
+                request_timeout=request_timeout,
+            ) or sent
+    client = UPSTREAM_CLIENT
+    if client is not None and client.enabled:
+        try:
+            queued = client.submit(payload)
+            sent = queued or sent
+        except Exception:
+            LOGGER.exception("[UPSTREAM] Falha ao enfileirar evento %s", payload.get("event_type"))
     return sent
 
 def slugify_entity(value: str) -> str:
@@ -1639,7 +1656,7 @@ def validate_reader_structure(readers: list[dict[str, Any]]) -> None:
             raise RuntimeError(f"Conector inválido em {connection['name']}: {connector}")
         if connection.get("enabled", True) and connector not in SUPPORTED_DRIVERS:
             raise RuntimeError(
-                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.17.0. "
+                f"O conector '{connector}' de {connection['name']} ainda não está implementado na versão 0.18.0. "
                 "Mantenha a conexão desativada ou selecione EVO/MQTT/Redfish/Linux."
             )
         if not isinstance(connection.get("enabled", True), bool):
@@ -2430,6 +2447,20 @@ def main() -> None:
     photo_max_size_mb = int(
         config.get("photo_max_size_mb", 5)
     )
+
+    global UPSTREAM_CLIENT, LOCAL_OUTPUT_ENABLED
+    LOCAL_OUTPUT_ENABLED = bool(config.get("local_output_enabled", True))
+    UPSTREAM_CLIENT = UpstreamClient.from_config(config, logger=LOGGER)
+    if UPSTREAM_CLIENT.enabled:
+        UPSTREAM_CLIENT.start()
+        LOGGER.info(
+            "[UPSTREAM] habilitado | endpoint=%s | fila=%s | local_output=%s",
+            UPSTREAM_CLIENT.endpoint,
+            UPSTREAM_CLIENT.queue_path,
+            LOCAL_OUTPUT_ENABLED,
+        )
+    else:
+        LOGGER.info("[UPSTREAM] desabilitado | local_output=%s", LOCAL_OUTPUT_ENABLED)
 
     bridge_event = str(config.get("bridge_event", DEFAULT_BRIDGE_EVENT))
     connection_offline_event = str(

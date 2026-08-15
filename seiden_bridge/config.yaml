@@ -1,5 +1,5 @@
 name: Seiden Bridge
-version: 0.17.0
+version: 0.18.0
 slug: seiden_bridge
 description: Camada de integração do Seiden One — captura, normalização e publicação de eventos canônicos
 url: https://github.com/eduseiden/Seiden_Bridge
@@ -26,6 +26,16 @@ options:
   bridge_event: seiden_bridge_event
   connection_offline_event: seiden_connection_offline
   connection_online_event: seiden_connection_online
+  local_output_enabled: true
+  upstream_enabled: false
+  upstream_endpoint: ''
+  upstream_token: ''
+  upstream_timeout: 15
+  upstream_verify_tls: true
+  upstream_retry_interval: 5
+  upstream_max_retry_interval: 300
+  upstream_retention_days: 7
+  upstream_queue_max_mb: 64
   connections:
   - id: evo_principal
     name: Entrada Principal
@@ -54,6 +64,16 @@ schema:
   bridge_event: str
   connection_offline_event: str
   connection_online_event: str
+  local_output_enabled: bool
+  upstream_enabled: bool
+  upstream_endpoint: str
+  upstream_token: password?
+  upstream_timeout: int
+  upstream_verify_tls: bool
+  upstream_retry_interval: int
+  upstream_max_retry_interval: int
+  upstream_retention_days: int
+  upstream_queue_max_mb: int
   connections:
   - id: str
     name: str

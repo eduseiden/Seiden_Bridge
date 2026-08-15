@@ -1,6 +1,34 @@
-# Seiden Bridge 0.17.0
+# Seiden Bridge 0.18.0
 
-## Linux SSH Connector — 0.17.0
+
+A versão 0.18.0 adiciona uma segunda saída independente para os eventos canônicos: HTTPS upstream com autenticação Bearer e store-and-forward persistente. O funcionamento local via Home Assistant permanece habilitado por padrão e pode coexistir com a saída cloud.
+
+### Modos de operação
+
+- `local_output_enabled: true` + `upstream_enabled: false`: comportamento local legado/lab.
+- `local_output_enabled: true` + `upstream_enabled: true`: operação híbrida, com evento local e cópia confiável para cloud.
+- `local_output_enabled: false` + `upstream_enabled: true`: edge cloud-first, sem publicação dos eventos canônicos no barramento local.
+
+O upstream recebe o mesmo payload canônico produzido pelo Bridge. Isso inclui Environmental Sources (base de EEA/TCA), MQTT/LCA, estados canônicos, EVO e telemetria dos conectores suportados. A fila SQLite fica em `/data/seiden_bridge_upstream.db`, sobrevive a reinícios e usa retry exponencial.
+
+Exemplo:
+
+```yaml
+local_output_enabled: true
+upstream_enabled: true
+upstream_endpoint: https://SEU-ENDPOINT/api/v1/ingest
+upstream_token: SEU_TOKEN
+upstream_timeout: 15
+upstream_verify_tls: true
+upstream_retry_interval: 5
+upstream_max_retry_interval: 300
+upstream_retention_days: 7
+upstream_queue_max_mb: 64
+```
+
+> O endpoint cloud precisa aceitar o contrato canônico do Bridge. A 0.18.0 não altera o schema dos eventos; ela adiciona transporte confiável.
+
+## Cloud Upstream + Store-and-Forward — 0.18.0
 
 Adiciona coleta **agentless** de telemetria de servidores Linux via SSH, usando chave privada ou senha. O conector publica `infrastructure.telemetry_snapshot` no mesmo schema canônico 2.0 usado pela infraestrutura, sem depender de Home Assistant no servidor monitorado.
 
